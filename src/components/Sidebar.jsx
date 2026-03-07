@@ -1,56 +1,72 @@
 import OutlinePanel from './OutlinePanel'
 import InboxPanel from './InboxPanel'
+import SearchResults from './SearchResults'
 
 export default function Sidebar({
-  sidebarTab,
-  isOnline,
-  totalWordCount,
-  onSidebarTabChange,
-  chapters,
-  scenes,
-  inboxItems,
-  selectedSceneId,
-  onSelectScene,
-  onAddChapter,
-  onUpdateChapter,
-  onDeleteChapter,
-  onReorderChapter,
-  onAddScene,
-  onUpdateScene,
-  onDeleteScene,
-  onReorderScene,
-  onAddInboxItem,
-  onUpdateInboxItem,
-  onDeleteInboxItem,
-  onPromoteInboxItem,
+  sidebarTab, isOnline, totalWordCount, settings,
+  searchQuery, searchResults, searchInputRef,
+  onSidebarTabChange, onSelectScene, onSearchChange, onShowSettings,
+  chapters, scenes, inboxItems, selectedSceneId,
+  onAddChapter, onUpdateChapter, onDeleteChapter, onReorderChapter, onReorderChaptersByIds,
+  onAddScene, onUpdateScene, onDeleteScene, onReorderScene, onReorderScenesByIds,
+  onAddInboxItem, onUpdateInboxItem, onDeleteInboxItem, onPromoteInboxItem,
 }) {
+  const goal = settings?.wordCountGoal || 0
+  const progress = goal > 0 ? Math.min(100, Math.round((totalWordCount / goal) * 100)) : 0
+
   return (
     <aside className="sidebar">
+      {/* Header */}
       <div className="sidebar-header">
         <span className="logo">Draft Punk</span>
-        <span
-          className={`status-dot ${isOnline ? 'online' : 'offline'}`}
-          title={isOnline ? 'Online — syncing' : 'Offline — notes will sync when reconnected'}
+        <div className="sidebar-header-right">
+          <span
+            className={`status-dot ${isOnline ? 'online' : 'offline'}`}
+            title={isOnline ? 'Online — syncing' : 'Offline — notes will sync when reconnected'}
+          />
+          <button className="settings-btn" onClick={onShowSettings} title="Settings (⌘,)">
+            ⚙
+          </button>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="sidebar-search">
+        <input
+          ref={searchInputRef}
+          className="search-input"
+          placeholder="Search… (⌘F)"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
         />
+        {searchQuery && (
+          <button className="search-clear" onClick={() => onSearchChange('')} title="Clear">✕</button>
+        )}
       </div>
 
-      <div className="sidebar-tabs">
-        <button
-          className={`tab-btn${sidebarTab === 'outline' ? ' active' : ''}`}
-          onClick={() => onSidebarTabChange('outline')}
-        >
-          Outline
-        </button>
-        <button
-          className={`tab-btn${sidebarTab === 'inbox' ? ' active' : ''}`}
-          onClick={() => onSidebarTabChange('inbox')}
-        >
-          Inbox
-        </button>
-      </div>
+      {/* Tabs — hidden during search */}
+      {!searchQuery && (
+        <div className="sidebar-tabs">
+          <button
+            className={`tab-btn${sidebarTab === 'outline' ? ' active' : ''}`}
+            onClick={() => onSidebarTabChange('outline')}
+          >
+            Outline
+          </button>
+          <button
+            className={`tab-btn${sidebarTab === 'inbox' ? ' active' : ''}`}
+            onClick={() => onSidebarTabChange('inbox')}
+          >
+            Inbox
+          </button>
+        </div>
+      )}
 
+      {/* Content */}
       <div className="sidebar-content">
-        {sidebarTab === 'outline' ? (
+        {searchQuery ? (
+          <SearchResults query={searchQuery} results={searchResults} onSelectScene={onSelectScene} />
+        ) : sidebarTab === 'outline' ? (
           <OutlinePanel
             chapters={chapters}
             scenes={scenes}
@@ -60,10 +76,12 @@ export default function Sidebar({
             onUpdateChapter={onUpdateChapter}
             onDeleteChapter={onDeleteChapter}
             onReorderChapter={onReorderChapter}
+            onReorderChaptersByIds={onReorderChaptersByIds}
             onAddScene={onAddScene}
             onUpdateScene={onUpdateScene}
             onDeleteScene={onDeleteScene}
             onReorderScene={onReorderScene}
+            onReorderScenesByIds={onReorderScenesByIds}
           />
         ) : (
           <InboxPanel
@@ -78,10 +96,20 @@ export default function Sidebar({
         )}
       </div>
 
+      {/* Footer */}
       <div className="sidebar-footer">
-        <span className="word-count-total">
-          {totalWordCount.toLocaleString()} words total
-        </span>
+        {goal > 0 ? (
+          <div className="goal-section">
+            <div className="goal-bar-track">
+              <div className="goal-bar-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <span className="goal-label">
+              {totalWordCount.toLocaleString()} / {goal.toLocaleString()} words ({progress}%)
+            </span>
+          </div>
+        ) : (
+          <span className="word-count-total">{totalWordCount.toLocaleString()} words total</span>
+        )}
       </div>
     </aside>
   )

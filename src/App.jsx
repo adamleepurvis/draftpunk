@@ -3,6 +3,7 @@ import { supabase } from './lib/supabase'
 import { getOfflineQueue, addToOfflineQueue, clearOfflineQueue } from './lib/offlineQueue'
 import Sidebar from './components/Sidebar'
 import WritingPanel from './components/WritingPanel'
+import SettingsModal from './components/SettingsModal'
 
 export default function App() {
   const [chapters, setChapters] = useState([])
@@ -13,32 +14,65 @@ export default function App() {
   const [mobileView, setMobileView] = useState('sidebar')
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [isSaving, setIsSaving] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showSettings, setShowSettings] = useState(false)
+  const [settings, setSettings] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('draftpunk_settings') || '{}') }
+    catch { return {} }
+  })
 
-  // Refs for stable closure values in realtime handlers
+  // Refs
   const selectedSceneIdRef = useRef(null)
   const isDirtyRef = useRef(false)
   const saveTimeoutRef = useRef(null)
+  const synopsisTimeoutRef = useRef(null)
+  const searchInputRef = useRef(null)
 
-  useEffect(() => {
-    selectedSceneIdRef.current = selectedSceneId
-  }, [selectedSceneId])
+  useEffect(() => { selectedSceneIdRef.current = selectedSceneId }, [selectedSceneId])
 
-  // Derived values
-  const selectedScene = scenes.find(s => s.id === selectedSceneId) ?? null
+  // Derived
+  const selectedScene = scenes.find((s) => s.id === selectedSceneId) ?? null
   const totalWordCount = scenes.reduce((sum, scene) => {
     if (!scene.content?.trim()) return sum
     return sum + scene.content.trim().split(/\s+/).filter(Boolean).length
   }, 0)
 
+  const searchResults = searchQuery.trim()
+    ? {
+        scenes: scenes
+          .filter(
+            (s) =>
+              s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              s.content.toLowerCase().includes(searchQuery.toLowerCase())
+          )
+          .map((s) => {
+            const chapter = chapters.find((c) => c.id === s.chapter_id)
+            const idx = s.content.toLowerCase().indexOf(searchQuery.toLowerCase())
+            const snippet =
+              idx !== -1
+                ? '…' + s.content.slice(Math.max(0, idx - 30), idx + 60).trim() + '…'
+                : null
+            return { ...s, chapterTitle: chapter?.title, snippet }
+          }),
+        inbox: inboxItems.filter((i) =>
+          i.content.toLowerCase().includes(searchQuery.toLowerCase())
+        ),
+      }
+    : null
+
+  // ── Settings ──────────────────────────────────────────────────
+
+  function updateSetting(key, value) {
+    const next = { ...settings, [key]: value }
+    setSettings(next)
+    localStorage.setItem('draftpunk_settings', JSON.stringify(next))
+  }
+
   // ── Online / offline ──────────────────────────────────────────
 
   useEffect(() => {
-    const handleOnline = async () => {
-      setIsOnline(true)
-      await flushOfflineQueue()
-    }
+    const handleOnline = async () => { setIsOnline(true); await flushOfflineQueue() }
     const handleOffline = () => setIsOnline(false)
-
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
     return () => {
@@ -46,6 +80,24 @@ export default function App() {
       window.removeEventListener('offline', handleOffline)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Keyboard shortcuts ────────────────────────────────────────
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && e.key === 'f') { e.preventDefault(); searchInputRef.current?.focus() }
+      if (mod && e.shiftKey && e.key === 'N') { e.preventDefault(); addChapter() }
+      if (mod && e.key === 'e') { e.preventDefault(); exportAll() }
+      if (e.key === 'Escape') {
+        if (searchQuery) { setSearchQuery(''); searchInputRef.current?.blur() }
+        else if (mobileView === 'writing') setMobileView('sidebar')
+        else if (showSettings) setShowSettings(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [searchQuery, mobileView, showSettings]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Initial load + realtime ───────────────────────────────────
 
@@ -74,7 +126,6 @@ export default function App() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scenes' }, (payload) => {
         setScenes((prev) => {
-          // Don't overwrite content the user is actively typing
           if (
             payload.eventType === 'UPDATE' &&
             payload.new.id === selectedSceneIdRef.current &&
@@ -90,13 +141,10 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox' }, (payload) => {
         setInboxItems((prev) => {
           const updated = applyChange(prev, payload, null)
-          return [...updated].sort(
-            (a, b) => new Date(b.created_at) - new Date(a.created_at)
-          )
+          return [...updated].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         })
       })
       .subscribe()
-
     return () => supabase.removeChannel(channel)
   }
 
@@ -112,9 +160,7 @@ export default function App() {
     } else {
       return list
     }
-    if (sortField) {
-      updated = [...updated].sort((a, b) => a[sortField] - b[sortField])
-    }
+    if (sortField) updated = [...updated].sort((a, b) => a[sortField] - b[sortField])
     return updated
   }
 
@@ -123,15 +169,40 @@ export default function App() {
   async function flushOfflineQueue() {
     const queue = getOfflineQueue()
     if (queue.length === 0) return
-    for (const item of queue) {
-      await supabase.from('inbox').insert(item)
-    }
+    for (const item of queue) await supabase.from('inbox').insert(item)
     clearOfflineQueue()
-    const { data } = await supabase
-      .from('inbox')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const { data } = await supabase.from('inbox').select('*').order('created_at', { ascending: false })
     if (data) setInboxItems(data)
+  }
+
+  // ── Export ────────────────────────────────────────────────────
+
+  function downloadText(text, filename) {
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportCurrentScene() {
+    if (!selectedScene) return
+    const chapter = chapters.find((c) => c.id === selectedScene.chapter_id)
+    const text = `${chapter?.title || ''}\n${selectedScene.title}\n${'─'.repeat(40)}\n\n${selectedScene.content || ''}`
+    downloadText(text, `${selectedScene.title.replace(/[^a-z0-9]/gi, '_')}.txt`)
+  }
+
+  function exportAll() {
+    const sorted = [...chapters].sort((a, b) => a.position - b.position)
+    const parts = sorted.flatMap((ch) => {
+      const chScenes = scenes
+        .filter((s) => s.chapter_id === ch.id)
+        .sort((a, b) => a.position - b.position)
+      return [`# ${ch.title}\n`, ...chScenes.map((s) => `## ${s.title}\n\n${s.content || ''}\n`)]
+    })
+    downloadText(parts.join('\n'), 'draft.md')
   }
 
   // ── Chapters ──────────────────────────────────────────────────
@@ -139,10 +210,7 @@ export default function App() {
   async function addChapter() {
     const position = chapters.length
     const { data } = await supabase
-      .from('chapters')
-      .insert({ title: 'New Chapter', position })
-      .select()
-      .single()
+      .from('chapters').insert({ title: 'New Chapter', position }).select().single()
     if (data) setChapters((prev) => [...prev, data])
   }
 
@@ -152,19 +220,11 @@ export default function App() {
   }
 
   async function deleteChapter(id) {
-    const deletedSceneIds = scenes
-      .filter((s) => s.chapter_id === id)
-      .map((s) => s.id)
-
+    const deletedSceneIds = scenes.filter((s) => s.chapter_id === id).map((s) => s.id)
     await supabase.from('chapters').delete().eq('id', id)
-
     setChapters((prev) => prev.filter((c) => c.id !== id))
     setScenes((prev) => prev.filter((s) => s.chapter_id !== id))
-
-    if (deletedSceneIds.includes(selectedSceneId)) {
-      setSelectedSceneId(null)
-      setMobileView('sidebar')
-    }
+    if (deletedSceneIds.includes(selectedSceneId)) { setSelectedSceneId(null); setMobileView('sidebar') }
   }
 
   async function reorderChapter(id, direction) {
@@ -172,15 +232,17 @@ export default function App() {
     const idx = sorted.findIndex((c) => c.id === id)
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1
     if (swapIdx < 0 || swapIdx >= sorted.length) return
-
     const next = [...sorted]
     ;[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]]
     const updated = next.map((c, i) => ({ ...c, position: i }))
-
     setChapters(updated)
-    await Promise.all(
-      updated.map((c) => supabase.from('chapters').update({ position: c.position }).eq('id', c.id))
-    )
+    await Promise.all(updated.map((c) => supabase.from('chapters').update({ position: c.position }).eq('id', c.id)))
+  }
+
+  async function reorderChaptersByIds(orderedIds) {
+    const updated = chapters.map((c) => ({ ...c, position: orderedIds.indexOf(c.id) }))
+    setChapters([...updated].sort((a, b) => a.position - b.position))
+    await Promise.all(updated.map((c) => supabase.from('chapters').update({ position: c.position }).eq('id', c.id)))
   }
 
   // ── Scenes ────────────────────────────────────────────────────
@@ -188,10 +250,7 @@ export default function App() {
   async function addScene(chapterId) {
     const position = scenes.filter((s) => s.chapter_id === chapterId).length
     const { data } = await supabase
-      .from('scenes')
-      .insert({ chapter_id: chapterId, title: 'New Scene', content: '', position })
-      .select()
-      .single()
+      .from('scenes').insert({ chapter_id: chapterId, title: 'New Scene', content: '', position }).select().single()
     if (data) setScenes((prev) => [...prev, data])
   }
 
@@ -203,49 +262,50 @@ export default function App() {
   async function deleteScene(id) {
     await supabase.from('scenes').delete().eq('id', id)
     setScenes((prev) => prev.filter((s) => s.id !== id))
-    if (selectedSceneId === id) {
-      setSelectedSceneId(null)
-      setMobileView('sidebar')
-    }
+    if (selectedSceneId === id) { setSelectedSceneId(null); setMobileView('sidebar') }
   }
 
   async function reorderScene(id, direction) {
     const scene = scenes.find((s) => s.id === id)
     if (!scene) return
-
-    const siblings = scenes
-      .filter((s) => s.chapter_id === scene.chapter_id)
-      .sort((a, b) => a.position - b.position)
-
+    const siblings = scenes.filter((s) => s.chapter_id === scene.chapter_id).sort((a, b) => a.position - b.position)
     const idx = siblings.findIndex((s) => s.id === id)
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1
     if (swapIdx < 0 || swapIdx >= siblings.length) return
-
     const next = [...siblings]
     ;[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]]
     const updatedSiblings = next.map((s, i) => ({ ...s, position: i }))
+    setScenes((prev) => prev.map((s) => updatedSiblings.find((u) => u.id === s.id) ?? s))
+    await Promise.all(updatedSiblings.map((s) => supabase.from('scenes').update({ position: s.position }).eq('id', s.id)))
+  }
 
+  async function reorderScenesByIds(chapterId, orderedIds) {
     setScenes((prev) =>
-      prev.map((s) => updatedSiblings.find((u) => u.id === s.id) ?? s)
+      prev.map((s) => s.chapter_id !== chapterId ? s : { ...s, position: orderedIds.indexOf(s.id) })
     )
+    const toUpdate = scenes.filter((s) => s.chapter_id === chapterId)
     await Promise.all(
-      updatedSiblings.map((s) =>
-        supabase.from('scenes').update({ position: s.position }).eq('id', s.id)
-      )
+      toUpdate.map((s) => supabase.from('scenes').update({ position: orderedIds.indexOf(s.id) }).eq('id', s.id))
     )
   }
 
   function handleSceneContentChange(id, content) {
     isDirtyRef.current = true
     setScenes((prev) => prev.map((s) => (s.id === id ? { ...s, content } : s)))
-
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     setIsSaving(true)
-
     saveTimeoutRef.current = setTimeout(async () => {
       await supabase.from('scenes').update({ content }).eq('id', id)
       setIsSaving(false)
       isDirtyRef.current = false
+    }, 1200)
+  }
+
+  function handleSynopsisChange(id, synopsis) {
+    setScenes((prev) => prev.map((s) => (s.id === id ? { ...s, synopsis } : s)))
+    if (synopsisTimeoutRef.current) clearTimeout(synopsisTimeoutRef.current)
+    synopsisTimeoutRef.current = setTimeout(async () => {
+      await supabase.from('scenes').update({ synopsis }).eq('id', id)
     }, 1200)
   }
 
@@ -254,55 +314,34 @@ export default function App() {
   async function addInboxItem(content, tags = [], photoFile = null) {
     let photoUrl = null
     if (photoFile && isOnline) {
-      try {
-        photoUrl = await uploadPhoto(photoFile)
-      } catch (err) {
-        console.error('Photo upload failed:', err)
-      }
+      try { photoUrl = await uploadPhoto(photoFile) }
+      catch (err) { console.error('Photo upload failed:', err) }
     }
-
-    const item = {
-      content,
-      tags,
-      photo_url: photoUrl,
-      created_at: new Date().toISOString(),
-      promoted: false,
-    }
-
+    const item = { content, tags, photo_url: photoUrl, created_at: new Date().toISOString(), promoted: false }
     if (!isOnline) {
       addToOfflineQueue(item)
       setInboxItems((prev) => [{ ...item, id: `offline-${Date.now()}` }, ...prev])
       return
     }
-
     const { data } = await supabase.from('inbox').insert(item).select().single()
     if (data) setInboxItems((prev) => [data, ...prev])
   }
 
   async function updateInboxItem(id, updates) {
     setInboxItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...updates } : i)))
-    if (!String(id).startsWith('offline-')) {
-      await supabase.from('inbox').update(updates).eq('id', id)
-    }
+    if (!String(id).startsWith('offline-')) await supabase.from('inbox').update(updates).eq('id', id)
   }
 
   async function deleteInboxItem(id) {
     setInboxItems((prev) => prev.filter((i) => i.id !== id))
-    if (!String(id).startsWith('offline-')) {
-      await supabase.from('inbox').delete().eq('id', id)
-    }
+    if (!String(id).startsWith('offline-')) await supabase.from('inbox').delete().eq('id', id)
   }
 
   async function promoteInboxItem(inboxItem, chapterId) {
     const position = scenes.filter((s) => s.chapter_id === chapterId).length
     const title = inboxItem.content.replace(/\n/g, ' ').slice(0, 60).trim()
-
     const { data } = await supabase
-      .from('scenes')
-      .insert({ chapter_id: chapterId, title, content: inboxItem.content, position })
-      .select()
-      .single()
-
+      .from('scenes').insert({ chapter_id: chapterId, title, content: inboxItem.content, position }).select().single()
     if (data) setScenes((prev) => [...prev, data])
     await updateInboxItem(inboxItem.id, { promoted: true })
   }
@@ -321,6 +360,7 @@ export default function App() {
   function selectScene(sceneId) {
     setSelectedSceneId(sceneId)
     setMobileView('writing')
+    setSearchQuery('')
   }
 
   // ── Render ────────────────────────────────────────────────────
@@ -335,16 +375,24 @@ export default function App() {
         sidebarTab={sidebarTab}
         isOnline={isOnline}
         totalWordCount={totalWordCount}
+        settings={settings}
+        searchQuery={searchQuery}
+        searchResults={searchResults}
+        searchInputRef={searchInputRef}
         onSidebarTabChange={setSidebarTab}
         onSelectScene={selectScene}
+        onSearchChange={setSearchQuery}
+        onShowSettings={() => setShowSettings(true)}
         onAddChapter={addChapter}
         onUpdateChapter={updateChapter}
         onDeleteChapter={deleteChapter}
         onReorderChapter={reorderChapter}
+        onReorderChaptersByIds={reorderChaptersByIds}
         onAddScene={addScene}
         onUpdateScene={updateScene}
         onDeleteScene={deleteScene}
         onReorderScene={reorderScene}
+        onReorderScenesByIds={reorderScenesByIds}
         onAddInboxItem={addInboxItem}
         onUpdateInboxItem={updateInboxItem}
         onDeleteInboxItem={deleteInboxItem}
@@ -353,10 +401,21 @@ export default function App() {
       <WritingPanel
         scene={selectedScene}
         isSaving={isSaving}
+        settings={settings}
         onBack={() => setMobileView('sidebar')}
         onContentChange={handleSceneContentChange}
+        onSynopsisChange={handleSynopsisChange}
         onTitleChange={(id, title) => updateScene(id, { title })}
+        onExportScene={exportCurrentScene}
+        onExportAll={exportAll}
       />
+      {showSettings && (
+        <SettingsModal
+          settings={settings}
+          onUpdate={updateSetting}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </div>
   )
 }

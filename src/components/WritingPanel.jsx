@@ -7,6 +7,17 @@ const FONT_FAMILY_MAP = {
   mono: '"SF Mono", "Fira Code", "Fira Mono", monospace',
 }
 
+// Render **bold** markdown in review feedback
+function renderReviewLine(line) {
+  if (!line.includes('**')) return line || '\u00A0'
+  const parts = line.split(/(\*\*[^*]+\*\*)/)
+  return parts.map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i}>{part.slice(2, -2)}</strong>
+      : part
+  )
+}
+
 function wordCount(text) {
   if (!text?.trim()) return 0
   return text.trim().split(/\s+/).filter(Boolean).length
@@ -20,9 +31,12 @@ export default function WritingPanel({
   const [localTitle, setLocalTitle] = useState('')
   const [editingTitle, setEditingTitle] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const [reviewState, setReviewState] = useState('idle') // idle | loading | streaming | done | error
+  const [feedback, setFeedback] = useState('')
   const textareaRef = useRef(null)
   const prevSceneIdRef = useRef(null)
   const exportMenuRef = useRef(null)
+  const feedbackRef = useRef(null)
 
   useEffect(() => {
     if (scene) setLocalTitle(scene.title)
@@ -35,6 +49,12 @@ export default function WritingPanel({
       autoResize()
     }
   })
+
+  // Reset review when scene changes
+  useEffect(() => {
+    setReviewState('idle')
+    setFeedback('')
+  }, [scene?.id])
 
   // Close export dropdown on outside click
   useEffect(() => {
@@ -68,6 +88,61 @@ export default function WritingPanel({
   function handleTitleKeyDown(e) {
     if (e.key === 'Enter') { e.preventDefault(); handleTitleBlur() }
     if (e.key === 'Escape') { setLocalTitle(scene.title); setEditingTitle(false) }
+  }
+
+  async function handleReview() {
+    if (!scene?.content?.trim()) return
+    setReviewState('loading')
+    setFeedback('')
+
+    try {
+      const res = await fetch('/api/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: scene.title, content: scene.content }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err?.error?.message || `Error ${res.status}`)
+      }
+
+      setReviewState('streaming')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() // keep incomplete last line
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') continue
+          try {
+            const json = JSON.parse(data)
+            if (json.type === 'content_block_delta' && json.delta?.type === 'text_delta') {
+              setFeedback((prev) => prev + json.delta.text)
+            }
+          } catch {
+            // ignore unparseable SSE lines
+          }
+        }
+      }
+
+      setReviewState('done')
+      // Scroll feedback into view
+      setTimeout(() => feedbackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+    } catch (err) {
+      setReviewState('error')
+      setFeedback(err.message || 'Something went wrong. Try again.')
+    }
   }
 
   function handleBack() {
@@ -107,6 +182,16 @@ export default function WritingPanel({
           <span className={`save-status${isSaving ? ' saving' : ''}`}>
             {isSaving ? 'Saving…' : 'Saved'}
           </span>
+
+          {/* Review button */}
+          <button
+            className={`review-btn${reviewState === 'loading' || reviewState === 'streaming' ? ' reviewing' : ''}`}
+            onClick={handleReview}
+            disabled={reviewState === 'loading' || reviewState === 'streaming' || !scene?.content?.trim()}
+            title="Get editorial feedback on this scene"
+          >
+            {reviewState === 'loading' || reviewState === 'streaming' ? 'Reviewing…' : 'Review'}
+          </button>
 
           {/* Export menu */}
           <div className="export-menu" ref={exportMenuRef}>
@@ -176,6 +261,31 @@ export default function WritingPanel({
           placeholder="Start writing…"
           spellCheck
         />
+
+        {/* Editorial feedback */}
+        {(reviewState === 'streaming' || reviewState === 'done' || reviewState === 'error') && (
+          <div
+            ref={feedbackRef}
+            className={`review-panel${reviewState === 'error' ? ' review-error' : ''}`}
+          >
+            <div className="review-panel-header">
+              <span className="review-panel-title">Editorial Notes</span>
+              <button
+                className="review-panel-close"
+                onClick={() => { setReviewState('idle'); setFeedback('') }}
+                aria-label="Dismiss feedback"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="review-panel-body">
+              {feedback.split('\n').map((line, i) => (
+                <p key={i}>{renderReviewLine(line)}</p>
+              ))}
+              {reviewState === 'streaming' && <span className="review-cursor">▌</span>}
+            </div>
+          </div>
+        )}
       </div>
     </main>
   )

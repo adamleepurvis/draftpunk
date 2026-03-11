@@ -26,6 +26,7 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('draftpunk_word_targets') || '{}') }
     catch { return {} }
   })
+  const [fullscreen, setFullscreen] = useState(false)
 
   // Refs
   const selectedSceneIdRef = useRef(null)
@@ -122,14 +123,15 @@ export default function App() {
       if (mod && e.shiftKey && e.key === 'N') { e.preventDefault(); addChapter() }
       if (mod && e.key === 'e') { e.preventDefault(); exportAll() }
       if (e.key === 'Escape') {
-        if (searchQuery) { setSearchQuery(''); searchInputRef.current?.blur() }
+        if (fullscreen) { setFullscreen(false) }
+        else if (searchQuery) { setSearchQuery(''); searchInputRef.current?.blur() }
         else if (mobileView === 'writing') setMobileView('sidebar')
         else if (showSettings) setShowSettings(false)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [searchQuery, mobileView, showSettings]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchQuery, mobileView, showSettings, fullscreen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Initial load + realtime ───────────────────────────────────
 
@@ -402,7 +404,7 @@ export default function App() {
   if (!session) return <LoginScreen />
 
   return (
-    <div className={`app${mobileView === 'writing' ? ' mobile-writing' : ''}`}>
+    <div className={`app${mobileView === 'writing' ? ' mobile-writing' : ''}${fullscreen ? ' fullscreen' : ''}`}>
       <Sidebar
         chapters={chapters}
         scenes={scenes}
@@ -441,10 +443,13 @@ export default function App() {
         settings={settings}
         wordTarget={selectedSceneId ? (wordTargets[selectedSceneId] ?? 0) : 0}
         onSetWordTarget={(target) => selectedSceneId && setWordTarget(selectedSceneId, target)}
+        fullscreen={fullscreen}
+        onToggleFullscreen={() => setFullscreen((v) => !v)}
         onBack={() => setMobileView('sidebar')}
         onContentChange={handleSceneContentChange}
         onSynopsisChange={handleSynopsisChange}
         onTitleChange={(id, title) => updateScene(id, { title })}
+        onStatusChange={(id, status) => updateScene(id, { status })}
         onExportScene={exportCurrentScene}
         onExportAll={exportAll}
       />

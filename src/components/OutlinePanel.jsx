@@ -1,4 +1,26 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+
+const LABEL_COLORS = [
+  { key: 'red',    hex: '#cc0000' },
+  { key: 'orange', hex: '#d46b00' },
+  { key: 'yellow', hex: '#b8930a' },
+  { key: 'green',  hex: '#2d7a3a' },
+  { key: 'teal',   hex: '#0e7a7a' },
+  { key: 'blue',   hex: '#1a5fb4' },
+  { key: 'purple', hex: '#7040b0' },
+]
+
+const STATUS_CYCLE = [null, 'draft', 'revised', 'final']
+const STATUS_META = {
+  draft:   { label: 'Draft',   color: '#8e8e98' },
+  revised: { label: 'Revised', color: '#d46b00' },
+  final:   { label: 'Final',   color: '#2d7a3a' },
+}
+
+function cycleStatus(current) {
+  const idx = STATUS_CYCLE.indexOf(current ?? null)
+  return STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
+}
 
 export default function OutlinePanel({
   chapters, scenes, selectedSceneId,
@@ -10,7 +32,19 @@ export default function OutlinePanel({
   const [editingId, setEditingId] = useState(null)
   const [editingValue, setEditingValue] = useState('')
   const [dragOverId, setDragOverId] = useState(null)
+  const [colorPickerFor, setColorPickerFor] = useState(null) // { id, type }
   const dragItemRef = useRef(null)
+  const colorPickerRef = useRef(null)
+
+  // Close color picker on outside click
+  useEffect(() => {
+    if (!colorPickerFor) return
+    function handleClick(e) {
+      if (!colorPickerRef.current?.contains(e.target)) setColorPickerFor(null)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [colorPickerFor])
 
   // ── Editing ───────────────────────────────────────────────────
 
@@ -48,6 +82,26 @@ export default function OutlinePanel({
   }
   function confirmDeleteScene(id, title) {
     if (window.confirm(`Delete "${title}"? This cannot be undone.`)) onDeleteScene(id)
+  }
+
+  // ── Color picker ─────────────────────────────────────────────
+
+  function handleColorClick(e, id, type) {
+    e.stopPropagation()
+    setColorPickerFor((prev) => (prev?.id === id ? null : { id, type }))
+  }
+
+  function setColor(id, type, colorKey) {
+    if (type === 'chapter') onUpdateChapter(id, { color: colorKey })
+    else onUpdateScene(id, { color: colorKey })
+    setColorPickerFor(null)
+  }
+
+  // ── Status ────────────────────────────────────────────────────
+
+  function handleStatusClick(e, scene) {
+    e.stopPropagation()
+    onUpdateScene(scene.id, { status: cycleStatus(scene.status) })
   }
 
   // ── Drag and drop ─────────────────────────────────────────────
@@ -133,11 +187,14 @@ export default function OutlinePanel({
           .sort((a, b) => a.position - b.position)
         const open = isExpanded(chapter.id)
         const isDragOver = dragOverId === chapter.id
+        const chapterColor = chapter.color ? LABEL_COLORS.find((c) => c.key === chapter.color)?.hex : null
+        const isPickingChapterColor = colorPickerFor?.id === chapter.id
 
         return (
           <div
             key={chapter.id}
             className={`chapter-block${isDragOver ? ' drag-over' : ''}`}
+            style={chapterColor ? { borderLeft: `3px solid ${chapterColor}` } : {}}
             draggable
             onDragStart={(e) => handleDragStart(e, 'chapter', chapter.id)}
             onDragOver={(e) => handleDragOver(e, chapter.id)}
@@ -177,6 +234,12 @@ export default function OutlinePanel({
               )}
 
               <div className="item-actions">
+                <button
+                  className="color-btn"
+                  onClick={(e) => handleColorClick(e, chapter.id, 'chapter')}
+                  title="Set color label"
+                  style={chapterColor ? { color: chapterColor } : {}}
+                >●</button>
                 <button onClick={(e) => { e.stopPropagation(); onReorderChapter(chapter.id, 'up') }} disabled={ci === 0} title="Move up">↑</button>
                 <button onClick={(e) => { e.stopPropagation(); onReorderChapter(chapter.id, 'down') }} disabled={ci === sortedChapters.length - 1} title="Move down">↓</button>
                 <button onClick={(e) => startEdit(chapter.id, chapter.title, e)} title="Rename">✎</button>
@@ -184,51 +247,121 @@ export default function OutlinePanel({
               </div>
             </div>
 
+            {/* Chapter color picker */}
+            {isPickingChapterColor && (
+              <div className="color-picker" ref={colorPickerRef}>
+                {LABEL_COLORS.map(({ key, hex }) => (
+                  <button
+                    key={key}
+                    className={`color-swatch${chapter.color === key ? ' active' : ''}`}
+                    style={{ background: hex }}
+                    onClick={() => setColor(chapter.id, 'chapter', key)}
+                    title={key}
+                  />
+                ))}
+                <button
+                  className="color-swatch color-none"
+                  onClick={() => setColor(chapter.id, 'chapter', null)}
+                  title="No color"
+                >✕</button>
+              </div>
+            )}
+
             {/* Scenes */}
             {open && (
               <div className="scenes-list">
                 {chapterScenes.map((scene, si) => {
                   const isSceneDragOver = dragOverId === scene.id
+                  const sceneColor = scene.color ? LABEL_COLORS.find((c) => c.key === scene.color)?.hex : null
+                  const statusMeta = scene.status ? STATUS_META[scene.status] : null
+                  const isPickingSceneColor = colorPickerFor?.id === scene.id
+
                   return (
-                    <div
-                      key={scene.id}
-                      className={`scene-row${selectedSceneId === scene.id ? ' active' : ''}${isSceneDragOver ? ' drag-over' : ''}`}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, 'scene', scene.id, chapter.id)}
-                      onDragOver={(e) => handleDragOver(e, scene.id)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, scene.id, chapter.id)}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <span className="drag-handle" title="Drag to reorder">⠿</span>
+                    <div key={scene.id}>
+                      <div
+                        className={`scene-row${selectedSceneId === scene.id ? ' active' : ''}${isSceneDragOver ? ' drag-over' : ''}`}
+                        style={sceneColor ? { borderLeft: `3px solid ${sceneColor}` } : {}}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, 'scene', scene.id, chapter.id)}
+                        onDragOver={(e) => handleDragOver(e, scene.id)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, scene.id, chapter.id)}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <span className="drag-handle" title="Drag to reorder">⠿</span>
 
-                      {editingId === scene.id ? (
-                        <input
-                          className="rename-input"
-                          value={editingValue}
-                          onChange={(e) => setEditingValue(e.target.value)}
-                          onBlur={() => commitEdit('scene', scene.id)}
-                          onKeyDown={(e) => handleEditKeyDown(e, 'scene', scene.id)}
-                          autoFocus
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <span
-                          className="scene-title"
-                          onClick={() => onSelectScene(scene.id)}
-                          onDoubleClick={(e) => startEdit(scene.id, scene.title, e)}
-                          title="Click to open · Double-click to rename"
-                        >
-                          {scene.title}
-                        </span>
-                      )}
+                        {editingId === scene.id ? (
+                          <input
+                            className="rename-input"
+                            value={editingValue}
+                            onChange={(e) => setEditingValue(e.target.value)}
+                            onBlur={() => commitEdit('scene', scene.id)}
+                            onKeyDown={(e) => handleEditKeyDown(e, 'scene', scene.id)}
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <span
+                            className="scene-title"
+                            onClick={() => onSelectScene(scene.id)}
+                            onDoubleClick={(e) => startEdit(scene.id, scene.title, e)}
+                            title="Click to open · Double-click to rename"
+                          >
+                            {scene.title}
+                          </span>
+                        )}
 
-                      <div className="item-actions">
-                        <button onClick={(e) => { e.stopPropagation(); onReorderScene(scene.id, 'up') }} disabled={si === 0} title="Move up">↑</button>
-                        <button onClick={(e) => { e.stopPropagation(); onReorderScene(scene.id, 'down') }} disabled={si === chapterScenes.length - 1} title="Move down">↓</button>
-                        <button onClick={(e) => startEdit(scene.id, scene.title, e)} title="Rename">✎</button>
-                        <button onClick={(e) => { e.stopPropagation(); confirmDeleteScene(scene.id, scene.title) }} className="danger" title="Delete">✕</button>
+                        {statusMeta && (
+                          <button
+                            className="status-pill"
+                            style={{ color: statusMeta.color, borderColor: statusMeta.color }}
+                            onClick={(e) => handleStatusClick(e, scene)}
+                            title="Click to cycle status"
+                          >
+                            {statusMeta.label}
+                          </button>
+                        )}
+
+                        <div className="item-actions">
+                          {!statusMeta && (
+                            <button
+                              className="status-add-btn"
+                              onClick={(e) => handleStatusClick(e, scene)}
+                              title="Set status"
+                            >◎</button>
+                          )}
+                          <button
+                            className="color-btn"
+                            onClick={(e) => handleColorClick(e, scene.id, 'scene')}
+                            title="Set color label"
+                            style={sceneColor ? { color: sceneColor } : {}}
+                          >●</button>
+                          <button onClick={(e) => { e.stopPropagation(); onReorderScene(scene.id, 'up') }} disabled={si === 0} title="Move up">↑</button>
+                          <button onClick={(e) => { e.stopPropagation(); onReorderScene(scene.id, 'down') }} disabled={si === chapterScenes.length - 1} title="Move down">↓</button>
+                          <button onClick={(e) => startEdit(scene.id, scene.title, e)} title="Rename">✎</button>
+                          <button onClick={(e) => { e.stopPropagation(); confirmDeleteScene(scene.id, scene.title) }} className="danger" title="Delete">✕</button>
+                        </div>
                       </div>
+
+                      {/* Scene color picker */}
+                      {isPickingSceneColor && (
+                        <div className="color-picker" ref={colorPickerRef}>
+                          {LABEL_COLORS.map(({ key, hex }) => (
+                            <button
+                              key={key}
+                              className={`color-swatch${scene.color === key ? ' active' : ''}`}
+                              style={{ background: hex }}
+                              onClick={() => setColor(scene.id, 'scene', key)}
+                              title={key}
+                            />
+                          ))}
+                          <button
+                            className="color-swatch color-none"
+                            onClick={() => setColor(scene.id, 'scene', null)}
+                            title="No color"
+                          >✕</button>
+                        </div>
+                      )}
                     </div>
                   )
                 })}

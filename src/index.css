@@ -58,6 +58,8 @@ input, textarea, select { font-family: var(--font-ui); }
   height: 100vh;
   overflow: hidden;
 }
+.app.fullscreen { grid-template-columns: 0 1fr; }
+.app.fullscreen .sidebar { display: none; }
 
 /* ═══════════════════════════════════════════════════════════════
    SIDEBAR
@@ -272,6 +274,85 @@ input, textarea, select { font-family: var(--font-ui); }
 .item-actions button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .item-actions button.danger:hover { color: var(--danger); }
 .item-actions button:disabled { opacity: 0.25; cursor: not-allowed; }
+
+/* Color label button */
+.color-btn {
+  font-size: 11px !important;
+  opacity: 0.5;
+}
+.color-btn:hover { opacity: 1 !important; }
+
+/* Color picker swatches */
+.color-picker {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px 6px 28px;
+  flex-wrap: wrap;
+}
+.color-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.1s;
+}
+.color-swatch:hover { transform: scale(1.2); }
+.color-swatch.active { border-color: var(--text); }
+.color-swatch.color-none {
+  background: none !important;
+  border-color: var(--border);
+  color: var(--text-dim);
+  font-size: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+/* Status pill */
+.status-pill {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: none;
+  border: 1px solid;
+  border-radius: 3px;
+  padding: 1px 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.12s;
+  opacity: 0.8;
+}
+.status-pill:hover { opacity: 1; }
+.status-add-btn {
+  font-size: 11px !important;
+  opacity: 0 !important;
+  color: var(--text-dim) !important;
+}
+.scene-row:hover .status-add-btn { opacity: 0.5 !important; }
+.status-add-btn:hover { opacity: 1 !important; }
+
+/* Scene row needs to show status pill always */
+.scene-row { position: relative; }
+
+/* Fullscreen button */
+.fullscreen-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 3px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.12s;
+  line-height: 1;
+}
+.fullscreen-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Rename input */
 .rename-input {

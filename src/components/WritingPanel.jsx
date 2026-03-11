@@ -25,7 +25,8 @@ function wordCount(text) {
 
 export default function WritingPanel({
   scene, isSaving, settings, wordTarget, onSetWordTarget,
-  onBack, onContentChange, onSynopsisChange, onTitleChange,
+  fullscreen, onToggleFullscreen,
+  onBack, onContentChange, onSynopsisChange, onTitleChange, onStatusChange,
   onExportScene, onExportAll,
 }) {
   const [localTitle, setLocalTitle] = useState('')
@@ -221,6 +222,15 @@ export default function WritingPanel({
           <span className={`save-status${isSaving ? ' saving' : ''}`}>
             {isSaving ? 'Saving…' : 'Saved'}
           </span>
+
+          {/* Fullscreen */}
+          <button
+            className="fullscreen-btn"
+            onClick={onToggleFullscreen}
+            title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
+          >
+            {fullscreen ? '⊠' : '⤢'}
+          </button>
 
           {/* Review button */}
           <button

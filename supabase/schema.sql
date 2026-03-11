@@ -58,6 +58,11 @@ ALTER PUBLICATION supabase_realtime ADD TABLE chapters;
 ALTER PUBLICATION supabase_realtime ADD TABLE scenes;
 ALTER PUBLICATION supabase_realtime ADD TABLE inbox;
 
+-- ── Status + color migration (run once) ──────────────────────
+-- ALTER TABLE scenes   ADD COLUMN IF NOT EXISTS status TEXT;
+-- ALTER TABLE scenes   ADD COLUMN IF NOT EXISTS color  TEXT;
+-- ALTER TABLE chapters ADD COLUMN IF NOT EXISTS color  TEXT;
+
 -- ── Auth migration (run after enabling auth) ─────────────────
 -- Once you've enabled Supabase Auth and created a user, run this
 -- to lock the database down to authenticated users only.

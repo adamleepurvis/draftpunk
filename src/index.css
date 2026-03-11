@@ -71,7 +71,7 @@ input, textarea, select { font-family: var(--font-ui); }
   display: flex;
   flex-direction: column;
   height: 100vh;
-  overflow: hidden;
+  overflow: visible;
   flex-shrink: 0;
 }
 
@@ -129,7 +129,7 @@ input, textarea, select { font-family: var(--font-ui); }
 .sidebar-content {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: visible;
   min-height: 0;
 }
 
@@ -252,6 +252,28 @@ input, textarea, select { font-family: var(--font-ui); }
 }
 .scene-title:hover { color: var(--accent-bright); }
 
+/* CSS tooltips via data-tip attribute */
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-active);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+  z-index: 300;
+}
+[data-tip]:hover::after { opacity: 1; }
+
 /* Shared action buttons */
 .item-actions {
   display: flex;
@@ -274,6 +296,14 @@ input, textarea, select { font-family: var(--font-ui); }
 .item-actions button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .item-actions button.danger:hover { color: var(--danger); }
 .item-actions button:disabled { opacity: 0.25; cursor: not-allowed; }
+
+/* Always-visible color dot before title */
+.color-dot {
+  font-size: 8px;
+  flex-shrink: 0;
+  line-height: 1;
+  opacity: 0.9;
+}
 
 /* Color label button */
 .color-btn {

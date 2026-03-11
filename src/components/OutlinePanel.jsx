@@ -22,6 +22,9 @@ function cycleStatus(current) {
   return STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
 }
 
+// Stop mousedown from reaching a draggable parent (prevents drag-on-click)
+function blockDrag(e) { e.stopPropagation() }
+
 export default function OutlinePanel({
   chapters, scenes, selectedSceneId,
   onSelectScene, onAddChapter,
@@ -32,7 +35,7 @@ export default function OutlinePanel({
   const [editingId, setEditingId] = useState(null)
   const [editingValue, setEditingValue] = useState('')
   const [dragOverId, setDragOverId] = useState(null)
-  const [colorPickerFor, setColorPickerFor] = useState(null) // { id, type }
+  const [colorPickerFor, setColorPickerFor] = useState(null)
   const dragItemRef = useRef(null)
   const colorPickerRef = useRef(null)
 
@@ -106,50 +109,69 @@ export default function OutlinePanel({
 
   // ── Drag and drop ─────────────────────────────────────────────
 
-  function handleDragStart(e, type, id, chapterId = null) {
-    dragItemRef.current = { type, id, chapterId }
+  function handleChapterDragStart(e, id) {
+    dragItemRef.current = { type: 'chapter', id, chapterId: null }
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', id)
   }
 
-  function handleDragOver(e, id) {
+  function handleSceneDragStart(e, id, chapterId) {
+    e.stopPropagation() // prevent bubbling to chapter-block's dragStart
+    dragItemRef.current = { type: 'scene', id, chapterId }
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id)
+  }
+
+  function handleChapterDragOver(e, id) {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    setDragOverId(id)
+    if (dragItemRef.current?.type === 'chapter') setDragOverId(id)
   }
 
-  function handleDragLeave() {
-    setDragOverId(null)
+  function handleSceneDragOver(e, id) {
+    e.stopPropagation()
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragItemRef.current?.type === 'scene') setDragOverId(id)
   }
 
-  function handleDrop(e, targetId, targetChapterId = null) {
+  function handleDragLeave(e) {
+    // Only clear if leaving to outside this element (not into a child)
+    if (!e.currentTarget.contains(e.relatedTarget)) setDragOverId(null)
+  }
+
+  function handleChapterDrop(e, targetId) {
     e.preventDefault()
     setDragOverId(null)
     const drag = dragItemRef.current
-    if (!drag || drag.id === targetId) return
+    if (!drag || drag.type !== 'chapter' || drag.id === targetId) return
+    const sorted = [...chapters].sort((a, b) => a.position - b.position)
+    const fromIdx = sorted.findIndex((c) => c.id === drag.id)
+    const toIdx = sorted.findIndex((c) => c.id === targetId)
+    if (fromIdx === -1 || toIdx === -1) return
+    const newOrder = [...sorted]
+    const [moved] = newOrder.splice(fromIdx, 1)
+    newOrder.splice(toIdx, 0, moved)
+    onReorderChaptersByIds(newOrder.map((c) => c.id))
+    dragItemRef.current = null
+  }
 
-    if (drag.type === 'chapter') {
-      const sorted = [...chapters].sort((a, b) => a.position - b.position)
-      const fromIdx = sorted.findIndex((c) => c.id === drag.id)
-      const toIdx = sorted.findIndex((c) => c.id === targetId)
-      if (fromIdx === -1 || toIdx === -1) return
-      const newOrder = [...sorted]
-      const [moved] = newOrder.splice(fromIdx, 1)
-      newOrder.splice(toIdx, 0, moved)
-      onReorderChaptersByIds(newOrder.map((c) => c.id))
-    } else if (drag.type === 'scene' && drag.chapterId === targetChapterId) {
-      const siblings = scenes
-        .filter((s) => s.chapter_id === drag.chapterId)
-        .sort((a, b) => a.position - b.position)
-      const fromIdx = siblings.findIndex((s) => s.id === drag.id)
-      const toIdx = siblings.findIndex((s) => s.id === targetId)
-      if (fromIdx === -1 || toIdx === -1) return
-      const newOrder = [...siblings]
-      const [moved] = newOrder.splice(fromIdx, 1)
-      newOrder.splice(toIdx, 0, moved)
-      onReorderScenesByIds(drag.chapterId, newOrder.map((s) => s.id))
-    }
-
+  function handleSceneDrop(e, targetId, chapterId) {
+    e.stopPropagation()
+    e.preventDefault()
+    setDragOverId(null)
+    const drag = dragItemRef.current
+    if (!drag || drag.type !== 'scene' || drag.id === targetId || drag.chapterId !== chapterId) return
+    const siblings = scenes
+      .filter((s) => s.chapter_id === chapterId)
+      .sort((a, b) => a.position - b.position)
+    const fromIdx = siblings.findIndex((s) => s.id === drag.id)
+    const toIdx = siblings.findIndex((s) => s.id === targetId)
+    if (fromIdx === -1 || toIdx === -1) return
+    const newOrder = [...siblings]
+    const [moved] = newOrder.splice(fromIdx, 1)
+    newOrder.splice(toIdx, 0, moved)
+    onReorderScenesByIds(chapterId, newOrder.map((s) => s.id))
     dragItemRef.current = null
   }
 
@@ -196,15 +218,15 @@ export default function OutlinePanel({
             className={`chapter-block${isDragOver ? ' drag-over' : ''}`}
             style={chapterColor ? { borderLeft: `3px solid ${chapterColor}` } : {}}
             draggable
-            onDragStart={(e) => handleDragStart(e, 'chapter', chapter.id)}
-            onDragOver={(e) => handleDragOver(e, chapter.id)}
+            onDragStart={(e) => handleChapterDragStart(e, chapter.id)}
+            onDragOver={(e) => handleChapterDragOver(e, chapter.id)}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, chapter.id)}
+            onDrop={(e) => handleChapterDrop(e, chapter.id)}
             onDragEnd={handleDragEnd}
           >
             {/* Chapter header */}
             <div className="chapter-header">
-              <span className="drag-handle" title="Drag to reorder">⠿</span>
+              <span className="drag-handle">⠿</span>
               <button
                 className="expand-btn"
                 onClick={() => toggleChapter(chapter.id)}
@@ -212,6 +234,8 @@ export default function OutlinePanel({
               >
                 {open ? '▾' : '▸'}
               </button>
+
+              {chapterColor && <span className="color-dot" style={{ color: chapterColor }}>⬤</span>}
 
               {editingId === chapter.id ? (
                 <input
@@ -227,42 +251,35 @@ export default function OutlinePanel({
                 <span
                   className="chapter-title"
                   onDoubleClick={(e) => startEdit(chapter.id, chapter.title, e)}
-                  title="Double-click to rename"
                 >
                   {chapter.title}
                 </span>
               )}
 
-              <div className="item-actions">
-                <button
-                  className="color-btn"
-                  onClick={(e) => handleColorClick(e, chapter.id, 'chapter')}
-                  title="Set color label"
-                  style={chapterColor ? { color: chapterColor } : {}}
-                >●</button>
-                <button onClick={(e) => { e.stopPropagation(); onReorderChapter(chapter.id, 'up') }} disabled={ci === 0} title="Move up">↑</button>
-                <button onClick={(e) => { e.stopPropagation(); onReorderChapter(chapter.id, 'down') }} disabled={ci === sortedChapters.length - 1} title="Move down">↓</button>
-                <button onClick={(e) => startEdit(chapter.id, chapter.title, e)} title="Rename">✎</button>
-                <button onClick={(e) => { e.stopPropagation(); confirmDeleteChapter(chapter.id, chapter.title) }} className="danger" title="Delete">✕</button>
+              {/* Action buttons — block mousedown from reaching draggable parent */}
+              <div className="item-actions" onMouseDown={blockDrag}>
+                <button data-tip="Color" className="color-btn" onClick={(e) => handleColorClick(e, chapter.id, 'chapter')} style={chapterColor ? { color: chapterColor } : {}}>●</button>
+                <button data-tip="Move up" onClick={(e) => { e.stopPropagation(); onReorderChapter(chapter.id, 'up') }} disabled={ci === 0}>↑</button>
+                <button data-tip="Move down" onClick={(e) => { e.stopPropagation(); onReorderChapter(chapter.id, 'down') }} disabled={ci === sortedChapters.length - 1}>↓</button>
+                <button data-tip="Rename" onClick={(e) => startEdit(chapter.id, chapter.title, e)}>✎</button>
+                <button data-tip="Delete" onClick={(e) => { e.stopPropagation(); confirmDeleteChapter(chapter.id, chapter.title) }} className="danger">✕</button>
               </div>
             </div>
 
             {/* Chapter color picker */}
             {isPickingChapterColor && (
-              <div className="color-picker" ref={colorPickerRef}>
+              <div className="color-picker" ref={colorPickerRef} onMouseDown={blockDrag}>
                 {LABEL_COLORS.map(({ key, hex }) => (
                   <button
                     key={key}
                     className={`color-swatch${chapter.color === key ? ' active' : ''}`}
                     style={{ background: hex }}
-                    onClick={() => setColor(chapter.id, 'chapter', key)}
-                    title={key}
+                    onClick={(e) => { e.stopPropagation(); setColor(chapter.id, 'chapter', key) }}
                   />
                 ))}
                 <button
                   className="color-swatch color-none"
-                  onClick={() => setColor(chapter.id, 'chapter', null)}
-                  title="No color"
+                  onClick={(e) => { e.stopPropagation(); setColor(chapter.id, 'chapter', null) }}
                 >✕</button>
               </div>
             )}
@@ -282,13 +299,15 @@ export default function OutlinePanel({
                         className={`scene-row${selectedSceneId === scene.id ? ' active' : ''}${isSceneDragOver ? ' drag-over' : ''}`}
                         style={sceneColor ? { borderLeft: `3px solid ${sceneColor}` } : {}}
                         draggable
-                        onDragStart={(e) => handleDragStart(e, 'scene', scene.id, chapter.id)}
-                        onDragOver={(e) => handleDragOver(e, scene.id)}
+                        onDragStart={(e) => handleSceneDragStart(e, scene.id, chapter.id)}
+                        onDragOver={(e) => handleSceneDragOver(e, scene.id)}
                         onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, scene.id, chapter.id)}
+                        onDrop={(e) => handleSceneDrop(e, scene.id, chapter.id)}
                         onDragEnd={handleDragEnd}
                       >
-                        <span className="drag-handle" title="Drag to reorder">⠿</span>
+                        <span className="drag-handle">⠿</span>
+
+                        {sceneColor && <span className="color-dot" style={{ color: sceneColor }}>⬤</span>}
 
                         {editingId === scene.id ? (
                           <input
@@ -305,7 +324,6 @@ export default function OutlinePanel({
                             className="scene-title"
                             onClick={() => onSelectScene(scene.id)}
                             onDoubleClick={(e) => startEdit(scene.id, scene.title, e)}
-                            title="Click to open · Double-click to rename"
                           >
                             {scene.title}
                           </span>
@@ -315,50 +333,41 @@ export default function OutlinePanel({
                           <button
                             className="status-pill"
                             style={{ color: statusMeta.color, borderColor: statusMeta.color }}
+                            onMouseDown={blockDrag}
                             onClick={(e) => handleStatusClick(e, scene)}
-                            title="Click to cycle status"
+                            data-tip="Cycle status"
                           >
                             {statusMeta.label}
                           </button>
                         )}
 
-                        <div className="item-actions">
+                        {/* Action buttons — block mousedown from reaching draggable parent */}
+                        <div className="item-actions" onMouseDown={blockDrag}>
                           {!statusMeta && (
-                            <button
-                              className="status-add-btn"
-                              onClick={(e) => handleStatusClick(e, scene)}
-                              title="Set status"
-                            >◎</button>
+                            <button data-tip="Set status" className="status-add-btn" onClick={(e) => handleStatusClick(e, scene)}>◎</button>
                           )}
-                          <button
-                            className="color-btn"
-                            onClick={(e) => handleColorClick(e, scene.id, 'scene')}
-                            title="Set color label"
-                            style={sceneColor ? { color: sceneColor } : {}}
-                          >●</button>
-                          <button onClick={(e) => { e.stopPropagation(); onReorderScene(scene.id, 'up') }} disabled={si === 0} title="Move up">↑</button>
-                          <button onClick={(e) => { e.stopPropagation(); onReorderScene(scene.id, 'down') }} disabled={si === chapterScenes.length - 1} title="Move down">↓</button>
-                          <button onClick={(e) => startEdit(scene.id, scene.title, e)} title="Rename">✎</button>
-                          <button onClick={(e) => { e.stopPropagation(); confirmDeleteScene(scene.id, scene.title) }} className="danger" title="Delete">✕</button>
+                          <button data-tip="Color" className="color-btn" onClick={(e) => handleColorClick(e, scene.id, 'scene')} style={sceneColor ? { color: sceneColor } : {}}>●</button>
+                          <button data-tip="Move up" onClick={(e) => { e.stopPropagation(); onReorderScene(scene.id, 'up') }} disabled={si === 0}>↑</button>
+                          <button data-tip="Move down" onClick={(e) => { e.stopPropagation(); onReorderScene(scene.id, 'down') }} disabled={si === chapterScenes.length - 1}>↓</button>
+                          <button data-tip="Rename" onClick={(e) => startEdit(scene.id, scene.title, e)}>✎</button>
+                          <button data-tip="Delete" onClick={(e) => { e.stopPropagation(); confirmDeleteScene(scene.id, scene.title) }} className="danger">✕</button>
                         </div>
                       </div>
 
                       {/* Scene color picker */}
                       {isPickingSceneColor && (
-                        <div className="color-picker" ref={colorPickerRef}>
+                        <div className="color-picker" ref={colorPickerRef} onMouseDown={blockDrag}>
                           {LABEL_COLORS.map(({ key, hex }) => (
                             <button
                               key={key}
                               className={`color-swatch${scene.color === key ? ' active' : ''}`}
                               style={{ background: hex }}
-                              onClick={() => setColor(scene.id, 'scene', key)}
-                              title={key}
+                              onClick={(e) => { e.stopPropagation(); setColor(scene.id, 'scene', key) }}
                             />
                           ))}
                           <button
                             className="color-swatch color-none"
-                            onClick={() => setColor(scene.id, 'scene', null)}
-                            title="No color"
+                            onClick={(e) => { e.stopPropagation(); setColor(scene.id, 'scene', null) }}
                           >✕</button>
                         </div>
                       )}

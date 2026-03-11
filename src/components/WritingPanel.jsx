@@ -24,13 +24,15 @@ function wordCount(text) {
 }
 
 export default function WritingPanel({
-  scene, isSaving, settings,
+  scene, isSaving, settings, wordTarget, onSetWordTarget,
   onBack, onContentChange, onSynopsisChange, onTitleChange,
   onExportScene, onExportAll,
 }) {
   const [localTitle, setLocalTitle] = useState('')
   const [editingTitle, setEditingTitle] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const [editingTarget, setEditingTarget] = useState(false)
+  const [targetInput, setTargetInput] = useState('')
   const [reviewState, setReviewState] = useState('idle') // idle | loading | streaming | done | error
   const [feedback, setFeedback] = useState('')
   const textareaRef = useRef(null)
@@ -153,6 +155,23 @@ export default function WritingPanel({
   const count = wordCount(scene?.content)
   const fontSize = FONT_SIZE_MAP[settings?.fontSize || 'medium']
   const fontFamily = FONT_FAMILY_MAP[settings?.fontFamily || 'serif']
+  const targetProgress = wordTarget > 0 ? Math.min(100, Math.round((count / wordTarget) * 100)) : 0
+
+  function handleTargetClick() {
+    setTargetInput(wordTarget > 0 ? String(wordTarget) : '')
+    setEditingTarget(true)
+  }
+
+  function commitTarget() {
+    const val = parseInt(targetInput, 10)
+    onSetWordTarget(isNaN(val) || val <= 0 ? 0 : val)
+    setEditingTarget(false)
+  }
+
+  function handleTargetKeyDown(e) {
+    if (e.key === 'Enter') commitTarget()
+    if (e.key === 'Escape') setEditingTarget(false)
+  }
 
   if (!scene) {
     return (
@@ -176,9 +195,29 @@ export default function WritingPanel({
         </button>
 
         <div className="writing-meta">
-          <span className="scene-word-count">
-            {count.toLocaleString()} {count === 1 ? 'word' : 'words'}
-          </span>
+          {editingTarget ? (
+            <input
+              className="target-input"
+              type="number"
+              min="0"
+              value={targetInput}
+              onChange={(e) => setTargetInput(e.target.value)}
+              onBlur={commitTarget}
+              onKeyDown={handleTargetKeyDown}
+              placeholder="Target words…"
+              autoFocus
+            />
+          ) : (
+            <button
+              className={`scene-word-count${wordTarget > 0 ? ' has-target' : ''}`}
+              onClick={handleTargetClick}
+              title={wordTarget > 0 ? `${targetProgress}% of ${wordTarget.toLocaleString()} word target — click to change` : 'Click to set a word target'}
+            >
+              {wordTarget > 0
+                ? `${count.toLocaleString()} / ${wordTarget.toLocaleString()}`
+                : `${count.toLocaleString()} ${count === 1 ? 'word' : 'words'}`}
+            </button>
+          )}
           <span className={`save-status${isSaving ? ' saving' : ''}`}>
             {isSaving ? 'Saving…' : 'Saved'}
           </span>
@@ -215,6 +254,12 @@ export default function WritingPanel({
           </div>
         </div>
       </div>
+
+      {wordTarget > 0 && (
+        <div className="scene-progress-track">
+          <div className="scene-progress-fill" style={{ width: `${targetProgress}%` }} />
+        </div>
+      )}
 
       <div
         className="writing-body"

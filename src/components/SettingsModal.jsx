@@ -2,6 +2,7 @@ export default function SettingsModal({ settings, onUpdate, onClose }) {
   const fontSize = settings.fontSize || 'medium'
   const fontFamily = settings.fontFamily || 'serif'
   const goal = settings.wordCountGoal || ''
+  const theme = settings.theme || 'dark'
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -12,6 +13,21 @@ export default function SettingsModal({ settings, onUpdate, onClose }) {
         </div>
 
         <div className="modal-body">
+          <div className="setting-row">
+            <label className="setting-label">Theme</label>
+            <div className="setting-options">
+              {[{ key: 'dark', label: 'Dark' }, { key: 'light', label: 'Light' }].map(({ key, label }) => (
+                <button
+                  key={key}
+                  className={`option-btn${theme === key ? ' active' : ''}`}
+                  onClick={() => onUpdate('theme', key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="setting-row">
             <label className="setting-label">Daily word count goal</label>
             <input

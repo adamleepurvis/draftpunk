@@ -4,8 +4,10 @@ import { getOfflineQueue, addToOfflineQueue, clearOfflineQueue } from './lib/off
 import Sidebar from './components/Sidebar'
 import WritingPanel from './components/WritingPanel'
 import SettingsModal from './components/SettingsModal'
+import LoginScreen from './components/LoginScreen'
 
 export default function App() {
+  const [session, setSession] = useState(undefined) // undefined=loading, null=logged out
   const [chapters, setChapters] = useState([])
   const [scenes, setScenes] = useState([])
   const [inboxItems, setInboxItems] = useState([])
@@ -20,6 +22,10 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('draftpunk_settings') || '{}') }
     catch { return {} }
   })
+  const [wordTargets, setWordTargets] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('draftpunk_word_targets') || '{}') }
+    catch { return {} }
+  })
 
   // Refs
   const selectedSceneIdRef = useRef(null)
@@ -29,6 +35,22 @@ export default function App() {
   const searchInputRef = useRef(null)
 
   useEffect(() => { selectedSceneIdRef.current = selectedSceneId }, [selectedSceneId])
+
+  // ── Auth ──────────────────────────────────────────────────────
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // ── Theme ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', settings.theme || 'dark')
+  }, [settings.theme])
 
   // Derived
   const selectedScene = scenes.find((s) => s.id === selectedSceneId) ?? null
@@ -68,6 +90,16 @@ export default function App() {
     localStorage.setItem('draftpunk_settings', JSON.stringify(next))
   }
 
+  function setWordTarget(sceneId, target) {
+    const next = { ...wordTargets, [sceneId]: target }
+    setWordTargets(next)
+    localStorage.setItem('draftpunk_word_targets', JSON.stringify(next))
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut()
+  }
+
   // ── Online / offline ──────────────────────────────────────────
 
   useEffect(() => {
@@ -102,10 +134,11 @@ export default function App() {
   // ── Initial load + realtime ───────────────────────────────────
 
   useEffect(() => {
+    if (!session) return
     loadAll()
     const cleanup = setupRealtime()
     return cleanup
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadAll() {
     const [c, s, i] = await Promise.all([
@@ -365,6 +398,9 @@ export default function App() {
 
   // ── Render ────────────────────────────────────────────────────
 
+  if (session === undefined) return <div className="app-loading"><span>Loading…</span></div>
+  if (!session) return <LoginScreen />
+
   return (
     <div className={`app${mobileView === 'writing' ? ' mobile-writing' : ''}`}>
       <Sidebar
@@ -383,6 +419,7 @@ export default function App() {
         onSelectScene={selectScene}
         onSearchChange={setSearchQuery}
         onShowSettings={() => setShowSettings(true)}
+        onSignOut={signOut}
         onAddChapter={addChapter}
         onUpdateChapter={updateChapter}
         onDeleteChapter={deleteChapter}
@@ -402,6 +439,8 @@ export default function App() {
         scene={selectedScene}
         isSaving={isSaving}
         settings={settings}
+        wordTarget={selectedSceneId ? (wordTargets[selectedSceneId] ?? 0) : 0}
+        onSetWordTarget={(target) => selectedSceneId && setWordTarget(selectedSceneId, target)}
         onBack={() => setMobileView('sidebar')}
         onContentChange={handleSceneContentChange}
         onSynopsisChange={handleSynopsisChange}

@@ -5,7 +5,7 @@ import SearchResults from './SearchResults'
 export default function Sidebar({
   sidebarTab, isOnline, totalWordCount, settings,
   searchQuery, searchResults, searchInputRef,
-  onSidebarTabChange, onSelectScene, onSearchChange, onShowSettings,
+  onSidebarTabChange, onSelectScene, onSearchChange, onShowSettings, onSignOut,
   chapters, scenes, inboxItems, selectedSceneId,
   onAddChapter, onUpdateChapter, onDeleteChapter, onReorderChapter, onReorderChaptersByIds,
   onAddScene, onUpdateScene, onDeleteScene, onReorderScene, onReorderScenesByIds,
@@ -24,9 +24,8 @@ export default function Sidebar({
             className={`status-dot ${isOnline ? 'online' : 'offline'}`}
             title={isOnline ? 'Online — syncing' : 'Offline — notes will sync when reconnected'}
           />
-          <button className="settings-btn" onClick={onShowSettings} title="Settings (⌘,)">
-            ⚙
-          </button>
+          <button className="settings-btn" onClick={onShowSettings} title="Settings">⚙</button>
+          <button className="signout-btn" onClick={onSignOut} title="Sign out">→</button>
         </div>
       </div>
 

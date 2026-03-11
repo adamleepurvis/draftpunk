@@ -58,6 +58,28 @@ ALTER PUBLICATION supabase_realtime ADD TABLE chapters;
 ALTER PUBLICATION supabase_realtime ADD TABLE scenes;
 ALTER PUBLICATION supabase_realtime ADD TABLE inbox;
 
+-- ── Auth migration (run after enabling auth) ─────────────────
+-- Once you've enabled Supabase Auth and created a user, run this
+-- to lock the database down to authenticated users only.
+--
+-- Steps:
+--   1. Supabase Dashboard → Authentication → Providers → enable Email
+--   2. Authentication → Users → Add user → set email + password
+--   3. Run the SQL below:
+--
+-- DROP POLICY "allow_all_chapters" ON chapters;
+-- DROP POLICY "allow_all_scenes"   ON scenes;
+-- DROP POLICY "allow_all_inbox"    ON inbox;
+--
+-- CREATE POLICY "auth_chapters" ON chapters FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- CREATE POLICY "auth_scenes"   ON scenes   FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- CREATE POLICY "auth_inbox"    ON inbox    FOR ALL TO authenticated USING (true) WITH CHECK (true);
+--
+-- And for storage (run in SQL editor):
+-- DROP POLICY "allow_all_inbox_photos" ON storage.objects;
+-- CREATE POLICY "auth_inbox_photos" ON storage.objects FOR ALL TO authenticated
+--   USING (bucket_id = 'inbox-photos') WITH CHECK (bucket_id = 'inbox-photos');
+
 -- ── Storage ───────────────────────────────────────────────────
 -- Create the inbox-photos bucket via the Supabase Dashboard:
 --   Storage → New bucket → Name: "inbox-photos" → Public: ON

@@ -1,6 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './lib/supabase'
 import { getOfflineQueue, addToOfflineQueue, clearOfflineQueue } from './lib/offlineQueue'
+
+// Pending scene-content writes (survives tab close while offline)
+const PENDING_KEY = 'draftpunk_pending_writes'
+function getPendingWrites() {
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY) || '{}') } catch { return {} }
+}
+function setPendingWrite(id, content) {
+  const p = getPendingWrites(); p[id] = content
+  localStorage.setItem(PENDING_KEY, JSON.stringify(p))
+}
+function clearPendingWrite(id) {
+  const p = getPendingWrites(); delete p[id]
+  localStorage.setItem(PENDING_KEY, JSON.stringify(p))
+}
 import Sidebar from './components/Sidebar'
 import WritingPanel from './components/WritingPanel'
 import SettingsModal from './components/SettingsModal'
@@ -105,7 +119,7 @@ export default function App() {
   // ── Online / offline ──────────────────────────────────────────
 
   useEffect(() => {
-    const handleOnline = async () => { setIsOnline(true); await flushOfflineQueue() }
+    const handleOnline = async () => { setIsOnline(true); await flushPendingWrites(); await flushOfflineQueue() }
     const handleOffline = () => setIsOnline(false)
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
@@ -150,7 +164,12 @@ export default function App() {
       supabase.from('inbox').select('*').order('created_at', { ascending: false }),
     ])
     if (c.data) setChapters(c.data)
-    if (s.data) setScenes(s.data)
+    if (s.data) {
+      const pending = getPendingWrites()
+      setScenes(s.data.map((scene) =>
+        pending[scene.id] !== undefined ? { ...scene, content: pending[scene.id] } : scene
+      ))
+    }
     if (i.data) setInboxItems(i.data)
   }
 
@@ -201,6 +220,15 @@ export default function App() {
   }
 
   // ── Offline queue ─────────────────────────────────────────────
+
+  async function flushPendingWrites() {
+    const pending = Object.entries(getPendingWrites())
+    if (pending.length === 0) return
+    await Promise.all(pending.map(async ([id, content]) => {
+      const { error } = await supabase.from('scenes').update({ content }).eq('id', id)
+      if (!error) clearPendingWrite(id)
+    }))
+  }
 
   async function flushOfflineQueue() {
     const queue = getOfflineQueue()
@@ -328,10 +356,14 @@ export default function App() {
   function handleSceneContentChange(id, content) {
     isDirtyRef.current = true
     setScenes((prev) => prev.map((s) => (s.id === id ? { ...s, content } : s)))
+    setPendingWrite(id, content)
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     setIsSaving(true)
     saveTimeoutRef.current = setTimeout(async () => {
-      await supabase.from('scenes').update({ content }).eq('id', id)
+      try {
+        await supabase.from('scenes').update({ content }).eq('id', id)
+        clearPendingWrite(id)
+      } catch { /* stays in localStorage, flushed on reconnect */ }
       setIsSaving(false)
       isDirtyRef.current = false
     }, 1200)

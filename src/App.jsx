@@ -33,6 +33,7 @@ export default function App() {
   const isDirtyRef = useRef(false)
   const saveTimeoutRef = useRef(null)
   const synopsisTimeoutRef = useRef(null)
+  const notesTimeoutRef = useRef(null)
   const searchInputRef = useRef(null)
 
   useEffect(() => { selectedSceneIdRef.current = selectedSceneId }, [selectedSceneId])
@@ -344,6 +345,14 @@ export default function App() {
     }, 1200)
   }
 
+  function handleNotesChange(id, notes) {
+    setScenes((prev) => prev.map((s) => (s.id === id ? { ...s, notes } : s)))
+    if (notesTimeoutRef.current) clearTimeout(notesTimeoutRef.current)
+    notesTimeoutRef.current = setTimeout(async () => {
+      await supabase.from('scenes').update({ notes }).eq('id', id)
+    }, 1200)
+  }
+
   // ── Inbox ─────────────────────────────────────────────────────
 
   async function addInboxItem(content, tags = [], photoFile = null) {
@@ -448,6 +457,7 @@ export default function App() {
         onBack={() => setMobileView('sidebar')}
         onContentChange={handleSceneContentChange}
         onSynopsisChange={handleSynopsisChange}
+        onNotesChange={handleNotesChange}
         onTitleChange={(id, title) => updateScene(id, { title })}
         onStatusChange={(id, status) => updateScene(id, { status })}
         onExportScene={exportCurrentScene}

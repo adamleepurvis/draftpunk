@@ -23,10 +23,32 @@ function wordCount(text) {
   return text.trim().split(/\s+/).filter(Boolean).length
 }
 
+// Get the pixel offset of the caret within a textarea using a mirror div
+function getCaretPixelTop(textarea) {
+  const div = document.createElement('div')
+  const style = getComputedStyle(textarea)
+  ;['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
+    'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'width',
+  ].forEach((p) => { div.style[p] = style[p] })
+  div.style.position = 'absolute'
+  div.style.visibility = 'hidden'
+  div.style.top = '-9999px'
+  div.style.whiteSpace = 'pre-wrap'
+  div.style.wordBreak = 'break-word'
+  div.appendChild(document.createTextNode(textarea.value.substring(0, textarea.selectionStart)))
+  const span = document.createElement('span')
+  span.textContent = '\u200b'
+  div.appendChild(span)
+  document.body.appendChild(div)
+  const top = span.offsetTop
+  document.body.removeChild(div)
+  return top
+}
+
 export default function WritingPanel({
   scene, isSaving, settings, wordTarget, onSetWordTarget,
   fullscreen, onToggleFullscreen,
-  onBack, onContentChange, onSynopsisChange, onTitleChange, onStatusChange,
+  onBack, onContentChange, onSynopsisChange, onNotesChange, onTitleChange, onStatusChange,
   onExportScene, onExportAll,
 }) {
   const [localTitle, setLocalTitle] = useState('')
@@ -34,9 +56,10 @@ export default function WritingPanel({
   const [showExport, setShowExport] = useState(false)
   const [editingTarget, setEditingTarget] = useState(false)
   const [targetInput, setTargetInput] = useState('')
-  const [reviewState, setReviewState] = useState('idle') // idle | loading | streaming | done | error
+  const [reviewState, setReviewState] = useState('idle')
   const [feedback, setFeedback] = useState('')
   const textareaRef = useRef(null)
+  const writingBodyRef = useRef(null)
   const prevSceneIdRef = useRef(null)
   const exportMenuRef = useRef(null)
   const feedbackRef = useRef(null)
@@ -45,7 +68,6 @@ export default function WritingPanel({
     if (scene) setLocalTitle(scene.title)
   }, [scene?.id, scene?.title])
 
-  // Auto-resize on scene switch
   useEffect(() => {
     if (scene?.id !== prevSceneIdRef.current) {
       prevSceneIdRef.current = scene?.id ?? null
@@ -53,13 +75,11 @@ export default function WritingPanel({
     }
   })
 
-  // Reset review when scene changes
   useEffect(() => {
     setReviewState('idle')
     setFeedback('')
   }, [scene?.id])
 
-  // Close export dropdown on outside click
   useEffect(() => {
     if (!showExport) return
     function handleClick(e) {
@@ -76,9 +96,20 @@ export default function WritingPanel({
     ta.style.height = `${ta.scrollHeight}px`
   }
 
+  function doTypewriterScroll() {
+    if (!settings?.typewriterMode) return
+    const textarea = textareaRef.current
+    const body = writingBodyRef.current
+    if (!textarea || !body) return
+    const caretTop = getCaretPixelTop(textarea)
+    const absoluteTop = textarea.offsetTop + caretTop
+    body.scrollTo({ top: Math.max(0, absoluteTop - body.clientHeight * 0.42), behavior: 'smooth' })
+  }
+
   function handleContentChange(e) {
     onContentChange(scene.id, e.target.value)
     autoResize()
+    requestAnimationFrame(doTypewriterScroll)
   }
 
   function handleTitleBlur() {
@@ -97,33 +128,26 @@ export default function WritingPanel({
     if (!scene?.content?.trim()) return
     setReviewState('loading')
     setFeedback('')
-
     try {
       const res = await fetch('/api/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: scene.title, content: scene.content }),
       })
-
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err?.error?.message || `Error ${res.status}`)
       }
-
       setReviewState('streaming')
-
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
-
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
-        buffer = lines.pop() // keep incomplete last line
-
+        buffer = lines.pop()
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
           const data = line.slice(6).trim()
@@ -133,14 +157,10 @@ export default function WritingPanel({
             if (json.type === 'content_block_delta' && json.delta?.type === 'text_delta') {
               setFeedback((prev) => prev + json.delta.text)
             }
-          } catch {
-            // ignore unparseable SSE lines
-          }
+          } catch { /* ignore */ }
         }
       }
-
       setReviewState('done')
-      // Scroll feedback into view
       setTimeout(() => feedbackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
     } catch (err) {
       setReviewState('error')
@@ -157,18 +177,17 @@ export default function WritingPanel({
   const fontSize = FONT_SIZE_MAP[settings?.fontSize || 'medium']
   const fontFamily = FONT_FAMILY_MAP[settings?.fontFamily || 'serif']
   const targetProgress = wordTarget > 0 ? Math.min(100, Math.round((count / wordTarget) * 100)) : 0
+  const writingBg = settings?.writingBg || 'default'
 
   function handleTargetClick() {
     setTargetInput(wordTarget > 0 ? String(wordTarget) : '')
     setEditingTarget(true)
   }
-
   function commitTarget() {
     const val = parseInt(targetInput, 10)
     onSetWordTarget(isNaN(val) || val <= 0 ? 0 : val)
     setEditingTarget(false)
   }
-
   function handleTargetKeyDown(e) {
     if (e.key === 'Enter') commitTarget()
     if (e.key === 'Escape') setEditingTarget(false)
@@ -180,9 +199,7 @@ export default function WritingPanel({
         <div className="empty-state">
           <div className="empty-logo">Draft Punk</div>
           <p>Select a scene from the outline to start writing.</p>
-          <button className="empty-export-btn" onClick={onExportAll} title="Export all scenes as Markdown">
-            Export all scenes
-          </button>
+          <button className="empty-export-btn" onClick={onExportAll}>Export all scenes</button>
         </div>
       </main>
     )
@@ -191,9 +208,7 @@ export default function WritingPanel({
   return (
     <main className="writing-panel">
       <div className="writing-header">
-        <button className="back-btn" onClick={handleBack} aria-label="Back to outline">
-          ← Back
-        </button>
+        <button className="back-btn" onClick={handleBack} aria-label="Back to outline">← Back</button>
 
         <div className="writing-meta">
           {editingTarget ? (
@@ -212,7 +227,7 @@ export default function WritingPanel({
             <button
               className={`scene-word-count${wordTarget > 0 ? ' has-target' : ''}`}
               onClick={handleTargetClick}
-              title={wordTarget > 0 ? `${targetProgress}% of ${wordTarget.toLocaleString()} word target — click to change` : 'Click to set a word target'}
+              title={wordTarget > 0 ? `${targetProgress}% — click to change target` : 'Click to set a word target'}
             >
               {wordTarget > 0
                 ? `${count.toLocaleString()} / ${wordTarget.toLocaleString()}`
@@ -223,42 +238,24 @@ export default function WritingPanel({
             {isSaving ? 'Saving…' : 'Saved'}
           </span>
 
-          {/* Fullscreen */}
-          <button
-            className="fullscreen-btn"
-            onClick={onToggleFullscreen}
-            title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
-          >
+          <button className="fullscreen-btn" onClick={onToggleFullscreen} title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}>
             {fullscreen ? '⊠' : '⤢'}
           </button>
 
-          {/* Review button */}
           <button
             className={`review-btn${reviewState === 'loading' || reviewState === 'streaming' ? ' reviewing' : ''}`}
             onClick={handleReview}
             disabled={reviewState === 'loading' || reviewState === 'streaming' || !scene?.content?.trim()}
-            title="Get editorial feedback on this scene"
           >
             {reviewState === 'loading' || reviewState === 'streaming' ? 'Reviewing…' : 'Review'}
           </button>
 
-          {/* Export menu */}
           <div className="export-menu" ref={exportMenuRef}>
-            <button
-              className="export-toggle"
-              onClick={() => setShowExport((v) => !v)}
-              title="Export"
-            >
-              Export ▾
-            </button>
+            <button className="export-toggle" onClick={() => setShowExport((v) => !v)}>Export ▾</button>
             {showExport && (
               <div className="export-dropdown">
-                <button onClick={() => { onExportScene(); setShowExport(false) }}>
-                  This scene (.txt)
-                </button>
-                <button onClick={() => { onExportAll(); setShowExport(false) }}>
-                  All scenes (.md)
-                </button>
+                <button onClick={() => { onExportScene(); setShowExport(false) }}>This scene (.txt)</button>
+                <button onClick={() => { onExportAll(); setShowExport(false) }}>All scenes (.md)</button>
               </div>
             )}
           </div>
@@ -272,7 +269,8 @@ export default function WritingPanel({
       )}
 
       <div
-        className="writing-body"
+        ref={writingBodyRef}
+        className={`writing-body${writingBg !== 'default' ? ` writing-bg-${writingBg}` : ''}`}
         style={{ '--wf-size': fontSize, '--wf-family': fontFamily }}
       >
         {/* Title */}
@@ -286,11 +284,7 @@ export default function WritingPanel({
             autoFocus
           />
         ) : (
-          <h1
-            className="scene-title-display"
-            onClick={() => setEditingTitle(true)}
-            title="Click to rename"
-          >
+          <h1 className="scene-title-display" onClick={() => setEditingTitle(true)}>
             {scene.title}
           </h1>
         )}
@@ -307,6 +301,18 @@ export default function WritingPanel({
           />
         </details>
 
+        {/* Notes */}
+        <details className="synopsis-details">
+          <summary className="synopsis-summary">Notes</summary>
+          <textarea
+            className="synopsis-textarea notes-textarea"
+            value={scene.notes || ''}
+            onChange={(e) => onNotesChange(scene.id, e.target.value)}
+            placeholder="Research, continuity reminders, things to fix…"
+            rows={4}
+          />
+        </details>
+
         {/* Main content */}
         <textarea
           ref={textareaRef}
@@ -319,19 +325,10 @@ export default function WritingPanel({
 
         {/* Editorial feedback */}
         {(reviewState === 'streaming' || reviewState === 'done' || reviewState === 'error') && (
-          <div
-            ref={feedbackRef}
-            className={`review-panel${reviewState === 'error' ? ' review-error' : ''}`}
-          >
+          <div ref={feedbackRef} className={`review-panel${reviewState === 'error' ? ' review-error' : ''}`}>
             <div className="review-panel-header">
               <span className="review-panel-title">Editorial Notes</span>
-              <button
-                className="review-panel-close"
-                onClick={() => { setReviewState('idle'); setFeedback('') }}
-                aria-label="Dismiss feedback"
-              >
-                ✕
-              </button>
+              <button className="review-panel-close" onClick={() => { setReviewState('idle'); setFeedback('') }}>✕</button>
             </div>
             <div className="review-panel-body">
               {feedback.split('\n').map((line, i) => (

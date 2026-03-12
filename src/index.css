@@ -1267,6 +1267,73 @@ details[open] .synopsis-summary::before { content: '▾ '; }
 .synopsis-textarea:focus { border-color: var(--accent); color: var(--text); }
 .synopsis-textarea::placeholder { color: var(--text-dim); }
 
+.notes-textarea {
+  background: rgba(255, 200, 100, 0.04);
+  border-color: rgba(255, 200, 100, 0.15);
+}
+.notes-textarea:focus { border-color: rgba(255, 200, 100, 0.35); }
+
+/* ═══════════════════════════════════════════════════════════════
+   WRITING BACKGROUNDS
+═══════════════════════════════════════════════════════════════ */
+
+.writing-bg-cream {
+  background: #f5f0e8;
+  color: #2a2010;
+  --text: #2a2010;
+  --text-dim: #7a6e5a;
+  --border: #d8cdb8;
+}
+.writing-bg-cream .scene-textarea,
+.writing-bg-cream .scene-title-display,
+.writing-bg-cream .scene-title-input,
+.writing-bg-cream .synopsis-textarea {
+  background: transparent;
+  color: #2a2010;
+}
+.writing-bg-cream .synopsis-textarea { border-color: #d8cdb8; }
+.writing-bg-cream .synopsis-summary { color: #5a4e3a; }
+.writing-bg-cream .synopsis-details { border-color: #d8cdb8; }
+.writing-bg-cream .review-panel { background: #ede8df; border-color: #d8cdb8; }
+
+.writing-bg-sepia {
+  background: #e8dcc8;
+  color: #2a1a08;
+  --text: #2a1a08;
+  --text-dim: #7a5e3a;
+  --border: #c8b898;
+}
+.writing-bg-sepia .scene-textarea,
+.writing-bg-sepia .scene-title-display,
+.writing-bg-sepia .scene-title-input,
+.writing-bg-sepia .synopsis-textarea {
+  background: transparent;
+  color: #2a1a08;
+}
+.writing-bg-sepia .synopsis-textarea { border-color: #c8b898; }
+.writing-bg-sepia .synopsis-summary { color: #5a3e1a; }
+.writing-bg-sepia .synopsis-details { border-color: #c8b898; }
+.writing-bg-sepia .review-panel { background: #ddd0b8; border-color: #c8b898; }
+
+.writing-bg-dark {
+  background: #0d0d0f;
+  color: #c8c8d0;
+  --text: #c8c8d0;
+  --text-dim: #606068;
+  --border: #2a2a2e;
+}
+.writing-bg-dark .scene-textarea,
+.writing-bg-dark .scene-title-display,
+.writing-bg-dark .scene-title-input,
+.writing-bg-dark .synopsis-textarea {
+  background: transparent;
+  color: #c8c8d0;
+}
+.writing-bg-dark .synopsis-textarea { border-color: #2a2a2e; }
+.writing-bg-dark .synopsis-summary { color: #808088; }
+.writing-bg-dark .synopsis-details { border-color: #2a2a2e; }
+.writing-bg-dark .review-panel { background: #161618; border-color: #2a2a2e; }
+
 /* ═══════════════════════════════════════════════════════════════
    WRITING FONT OVERRIDES (CSS custom properties from WritingPanel)
 ═══════════════════════════════════════════════════════════════ */

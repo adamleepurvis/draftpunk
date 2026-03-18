@@ -782,12 +782,16 @@ details[open] .promoted-section summary::before { content: '▾ '; }
 
 /* Notes side panel */
 .notes-sidepanel {
-  width: 300px;
+  width: 380px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--border);
   background: var(--bg-sidebar);
+}
+
+@media (min-width: 1800px) {
+  .notes-sidepanel { width: 480px; }
 }
 
 .notes-sidepanel-header {

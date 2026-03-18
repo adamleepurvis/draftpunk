@@ -58,6 +58,7 @@ export default function WritingPanel({
   const [targetInput, setTargetInput] = useState('')
   const [reviewState, setReviewState] = useState('idle')
   const [feedback, setFeedback] = useState('')
+  const [showNotes, setShowNotes] = useState(false)
   const textareaRef = useRef(null)
   const writingBodyRef = useRef(null)
   const prevSceneIdRef = useRef(null)
@@ -78,6 +79,7 @@ export default function WritingPanel({
   useEffect(() => {
     setReviewState('idle')
     setFeedback('')
+    setShowNotes(false)
   }, [scene?.id])
 
   useEffect(() => {
@@ -207,6 +209,7 @@ export default function WritingPanel({
 
   return (
     <main className="writing-panel">
+    <div className="writing-main">
       <div className="writing-header">
         <button className="back-btn" onClick={handleBack} aria-label="Back to outline">← Back</button>
 
@@ -240,6 +243,14 @@ export default function WritingPanel({
 
           <button className="fullscreen-btn" onClick={onToggleFullscreen} title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}>
             {fullscreen ? '⊠' : '⤢'}
+          </button>
+
+          <button
+            className={`notes-toggle-btn${showNotes ? ' active' : ''}`}
+            onClick={() => setShowNotes((v) => !v)}
+            title="Toggle notes panel"
+          >
+            Notes
           </button>
 
           <button
@@ -301,18 +312,6 @@ export default function WritingPanel({
           />
         </details>
 
-        {/* Notes */}
-        <details className="synopsis-details">
-          <summary className="synopsis-summary">Notes</summary>
-          <textarea
-            className="synopsis-textarea notes-textarea"
-            value={scene.notes || ''}
-            onChange={(e) => onNotesChange(scene.id, e.target.value)}
-            placeholder="Research, continuity reminders, things to fix…"
-            rows={4}
-          />
-        </details>
-
         {/* Main content */}
         <textarea
           ref={textareaRef}
@@ -339,6 +338,24 @@ export default function WritingPanel({
           </div>
         )}
       </div>
+    </div>
+
+    {showNotes && (
+      <div className="notes-sidepanel">
+        <div className="notes-sidepanel-header">
+          <span>Notes</span>
+          <button className="notes-sidepanel-close" onClick={() => setShowNotes(false)}>✕</button>
+        </div>
+        <div className="notes-sidepanel-body">
+          <textarea
+            className="notes-sidepanel-textarea"
+            value={scene.notes || ''}
+            onChange={(e) => onNotesChange(scene.id, e.target.value)}
+            placeholder="Research, continuity reminders, things to fix…"
+          />
+        </div>
+      </div>
+    )}
     </main>
   )
 }

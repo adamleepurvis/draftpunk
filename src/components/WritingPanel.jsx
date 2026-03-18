@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'react'
 const FONT_SIZE_MAP = { small: '15px', medium: '18px', large: '22px' }
 const FONT_FAMILY_MAP = {
   serif: 'Georgia, "Palatino Linotype", serif',
+  merriweather: '"Merriweather", Georgia, serif',
+  garamond: '"EB Garamond", Georgia, serif',
   sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   mono: '"SF Mono", "Fira Code", "Fira Mono", monospace',
 }

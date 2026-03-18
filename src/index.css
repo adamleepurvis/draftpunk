@@ -1146,6 +1146,8 @@ details[open] .promoted-section summary::before { content: '▾ '; }
   font-size: 13px;
 }
 .setting-font-preview[data-font="serif"] { font-family: Georgia, serif; }
+.setting-font-preview[data-font="merriweather"] { font-family: "Merriweather", Georgia, serif; }
+.setting-font-preview[data-font="garamond"] { font-family: "EB Garamond", Georgia, serif; }
 .setting-font-preview[data-font="sans"] { font-family: -apple-system, sans-serif; }
 .setting-font-preview[data-font="mono"] { font-family: "SF Mono", monospace; }
 

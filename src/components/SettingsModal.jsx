@@ -62,7 +62,9 @@ export default function SettingsModal({ settings, onUpdate, onClose }) {
             <label className="setting-label">Writing font</label>
             <div className="setting-options">
               {[
-                { key: 'serif', label: 'Serif' },
+                { key: 'serif', label: 'Georgia' },
+                { key: 'merriweather', label: 'Merriweather' },
+                { key: 'garamond', label: 'Garamond' },
                 { key: 'sans', label: 'Sans-serif' },
                 { key: 'mono', label: 'Monospace' },
               ].map(({ key, label }) => (

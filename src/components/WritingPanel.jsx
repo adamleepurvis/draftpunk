@@ -300,18 +300,6 @@ export default function WritingPanel({
           </h1>
         )}
 
-        {/* Synopsis */}
-        <details className="synopsis-details">
-          <summary className="synopsis-summary">Synopsis</summary>
-          <textarea
-            className="synopsis-textarea"
-            value={scene.synopsis || ''}
-            onChange={(e) => onSynopsisChange(scene.id, e.target.value)}
-            placeholder="Brief summary of this scene…"
-            rows={3}
-          />
-        </details>
-
         {/* Main content */}
         <textarea
           ref={textareaRef}
@@ -343,10 +331,19 @@ export default function WritingPanel({
     {showNotes && (
       <div className="notes-sidepanel">
         <div className="notes-sidepanel-header">
-          <span>Notes</span>
+          <span>Scene Info</span>
           <button className="notes-sidepanel-close" onClick={() => setShowNotes(false)}>✕</button>
         </div>
         <div className="notes-sidepanel-body">
+          <label className="sidepanel-label">Synopsis</label>
+          <textarea
+            className="notes-sidepanel-textarea"
+            value={scene.synopsis || ''}
+            onChange={(e) => onSynopsisChange(scene.id, e.target.value)}
+            placeholder="Brief summary of this scene…"
+            rows={5}
+          />
+          <label className="sidepanel-label" style={{ marginTop: '20px' }}>Notes</label>
           <textarea
             className="notes-sidepanel-textarea"
             value={scene.notes || ''}

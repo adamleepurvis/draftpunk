@@ -838,6 +838,17 @@ details[open] .promoted-section summary::before { content: '▾ '; }
   display: block;
 }
 
+.sidepanel-section {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+}
+.sidepanel-section--grow {
+  flex: 1;
+  margin-bottom: 0;
+  min-height: 0;
+}
+
 .notes-sidepanel-textarea {
   width: 100%;
   background: transparent;
@@ -849,7 +860,10 @@ details[open] .promoted-section summary::before { content: '▾ '; }
   outline: none;
   font-family: inherit;
   padding: 0;
-  min-height: 80px;
+}
+.notes-sidepanel-textarea--grow {
+  flex: 1;
+  height: 100%;
 }
 .notes-sidepanel-textarea::placeholder { color: var(--text-dim); }
 

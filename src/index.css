@@ -841,18 +841,16 @@ details[open] .promoted-section summary::before { content: '▾ '; }
 .notes-sidepanel-textarea {
   width: 100%;
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  border: none;
   color: var(--text);
   font-size: 13px;
   line-height: 1.7;
-  resize: vertical;
+  resize: none;
   outline: none;
   font-family: inherit;
-  padding: 8px 10px;
+  padding: 0;
   min-height: 80px;
 }
-.notes-sidepanel-textarea:focus { border-color: var(--accent); }
 .notes-sidepanel-textarea::placeholder { color: var(--text-dim); }
 
 .notes-toggle-btn {

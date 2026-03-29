@@ -3,7 +3,7 @@ import InboxPanel from './InboxPanel'
 import SearchResults from './SearchResults'
 
 export default function Sidebar({
-  sidebarTab, isOnline, totalWordCount, settings,
+  sidebarTab, isOnline, totalWordCount, dailyWords, streak, settings,
   searchQuery, searchResults, searchInputRef,
   onSidebarTabChange, onSelectScene, onSearchChange, onShowSettings, onSignOut,
   chapters, scenes, inboxItems, selectedSceneId,
@@ -12,7 +12,7 @@ export default function Sidebar({
   onAddInboxItem, onUpdateInboxItem, onDeleteInboxItem, onPromoteInboxItem,
 }) {
   const goal = settings?.wordCountGoal || 0
-  const progress = goal > 0 ? Math.min(100, Math.round((totalWordCount / goal) * 100)) : 0
+  const progress = goal > 0 ? Math.min(100, Math.round((dailyWords / goal) * 100)) : 0
 
   return (
     <aside className="sidebar">
@@ -99,12 +99,21 @@ export default function Sidebar({
       <div className="sidebar-footer">
         {goal > 0 ? (
           <div className="goal-section">
+            <div className="goal-row">
+              <span className="goal-label">
+                {dailyWords.toLocaleString()} / {goal.toLocaleString()} today
+                {progress >= 100 ? ' ✓' : ` (${progress}%)`}
+              </span>
+              {streak > 0 && (
+                <span className="streak-badge" title={`${streak}-day streak`}>
+                  🔥 {streak}
+                </span>
+              )}
+            </div>
             <div className="goal-bar-track">
               <div className="goal-bar-fill" style={{ width: `${progress}%` }} />
             </div>
-            <span className="goal-label">
-              {totalWordCount.toLocaleString()} / {goal.toLocaleString()} words ({progress}%)
-            </span>
+            <span className="total-words-sub">{totalWordCount.toLocaleString()} words total</span>
           </div>
         ) : (
           <span className="word-count-total">{totalWordCount.toLocaleString()} words total</span>

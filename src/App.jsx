@@ -41,6 +41,10 @@ export default function App() {
     catch { return {} }
   })
   const [fullscreen, setFullscreen] = useState(false)
+  const [dailyTracking, setDailyTracking] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('draftpunk_daily') || 'null') }
+    catch { return null }
+  })
 
   // Refs
   const selectedSceneIdRef = useRef(null)
@@ -74,6 +78,49 @@ export default function App() {
     if (!scene.content?.trim()) return sum
     return sum + scene.content.trim().split(/\s+/).filter(Boolean).length
   }, 0)
+
+  // ── Daily word count tracking ─────────────────────────────────
+
+  const today = new Date().toISOString().split('T')[0]
+
+  function saveDailyTracking(tracking) {
+    setDailyTracking(tracking)
+    localStorage.setItem('draftpunk_daily', JSON.stringify(tracking))
+  }
+
+  // Initialize or roll over tracking when data first loads
+  useEffect(() => {
+    if (!session || totalWordCount === 0) return
+    if (dailyTracking?.date === today) return // already set for today
+
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+    let streak = dailyTracking?.streak ?? 0
+
+    if (dailyTracking && dailyTracking.date !== today) {
+      const daysBetween = Math.round(
+        (new Date(today) - new Date(dailyTracking.date)) / 86400000
+      )
+      // If yesterday's goal wasn't hit or a day was skipped, reset streak
+      if (!dailyTracking.hitToday || daysBetween > 1) streak = 0
+    }
+
+    saveDailyTracking({ date: today, startCount: totalWordCount, streak, hitToday: false })
+  }, [session, totalWordCount > 0]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-mark goal as hit when daily words cross the threshold
+  useEffect(() => {
+    const goal = settings.wordCountGoal || 0
+    if (!goal || !dailyTracking || dailyTracking.date !== today) return
+    const dailyWords = totalWordCount - (dailyTracking.startCount ?? totalWordCount)
+    if (dailyWords >= goal && !dailyTracking.hitToday) {
+      saveDailyTracking({ ...dailyTracking, hitToday: true, streak: (dailyTracking.streak ?? 0) + 1 })
+    }
+  }, [totalWordCount]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dailyWords = dailyTracking?.date === today
+    ? Math.max(0, totalWordCount - (dailyTracking.startCount ?? totalWordCount))
+    : 0
+  const streak = dailyTracking?.streak ?? 0
 
   const searchResults = searchQuery.trim()
     ? {
@@ -454,6 +501,8 @@ export default function App() {
         sidebarTab={sidebarTab}
         isOnline={isOnline}
         totalWordCount={totalWordCount}
+        dailyWords={dailyWords}
+        streak={streak}
         settings={settings}
         searchQuery={searchQuery}
         searchResults={searchResults}

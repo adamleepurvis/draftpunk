@@ -1168,6 +1168,9 @@ details[open] .promoted-section summary::before { content: '▾ '; }
 ═══════════════════════════════════════════════════════════════ */
 
 .goal-section { display: flex; flex-direction: column; gap: 4px; }
+.goal-row { display: flex; align-items: center; justify-content: space-between; }
+.streak-badge { font-size: 11px; color: var(--text-dim); }
+.total-words-sub { font-size: 10px; color: var(--text-dim); opacity: 0.5; }
 .goal-bar-track {
   height: 3px;
   background: var(--bg-hover);

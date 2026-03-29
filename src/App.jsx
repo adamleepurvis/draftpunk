@@ -93,15 +93,22 @@ export default function App() {
     if (!session || totalWordCount === 0) return
     if (dailyTracking?.date === today) return // already set for today
 
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
     let streak = dailyTracking?.streak ?? 0
 
     if (dailyTracking && dailyTracking.date !== today) {
       const daysBetween = Math.round(
         (new Date(today) - new Date(dailyTracking.date)) / 86400000
       )
-      // If yesterday's goal wasn't hit or a day was skipped, reset streak
-      if (!dailyTracking.hitToday || daysBetween > 1) streak = 0
+      const prevDayNet = totalWordCount - (dailyTracking.startCount ?? totalWordCount)
+
+      if (daysBetween > 1) {
+        // Missed a day entirely — reset
+        streak = 0
+      } else if (!dailyTracking.hitToday && prevDayNet >= 0) {
+        // Showed up, net positive, but didn't hit goal — reset
+        streak = 0
+      }
+      // Net-negative day (heavy editing): preserve streak as-is
     }
 
     saveDailyTracking({ date: today, startCount: totalWordCount, streak, hitToday: false })

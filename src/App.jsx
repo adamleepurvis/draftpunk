@@ -79,9 +79,19 @@ export default function App() {
     return sum + scene.content.trim().split(/\s+/).filter(Boolean).length
   }, 0)
 
-  // ── Daily word count tracking ─────────────────────────────────
+  // ── Word count tracking ───────────────────────────────────────
 
   const today = new Date().toISOString().split('T')[0]
+  const goalFrequency = settings.goalFrequency || 'daily'
+  const goalDaysPerWeek = settings.goalDaysPerWeek || 2
+
+  function getWeekStart(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00')
+    const day = d.getDay()
+    const diff = day === 0 ? -6 : 1 - day // shift to Monday
+    d.setDate(d.getDate() + diff)
+    return d.toISOString().split('T')[0]
+  }
 
   function saveDailyTracking(tracking) {
     setDailyTracking(tracking)
@@ -91,41 +101,71 @@ export default function App() {
   // Initialize or roll over tracking when data first loads
   useEffect(() => {
     if (!session || totalWordCount === 0) return
-    if (dailyTracking?.date === today) return // already set for today
+    if (dailyTracking?.date === today) return
 
+    const weekStart = getWeekStart(today)
     let streak = dailyTracking?.streak ?? 0
+    let daysWrittenThisWeek = dailyTracking?.weekStart === weekStart
+      ? (dailyTracking.daysWrittenThisWeek ?? [])
+      : [] // new week — reset days list
 
     if (dailyTracking && dailyTracking.date !== today) {
-      const daysBetween = Math.round(
-        (new Date(today) - new Date(dailyTracking.date)) / 86400000
-      )
-      const prevDayNet = totalWordCount - (dailyTracking.startCount ?? totalWordCount)
-
-      if (daysBetween > 1) {
-        // Missed a day entirely — reset
-        streak = 0
-      } else if (!dailyTracking.hitToday && prevDayNet >= 0) {
-        // Showed up, net positive, but didn't hit goal — reset
-        streak = 0
+      if (goalFrequency === 'daily') {
+        const daysBetween = Math.round((new Date(today) - new Date(dailyTracking.date)) / 86400000)
+        const prevDayNet = totalWordCount - (dailyTracking.startCount ?? totalWordCount)
+        if (daysBetween > 1) streak = 0
+        else if (!dailyTracking.hitToday && prevDayNet >= 0) streak = 0
+      } else {
+        // Weekly — check if previous week completed its goal
+        if (dailyTracking.weekStart && dailyTracking.weekStart !== weekStart) {
+          const prevDaysWritten = (dailyTracking.daysWrittenThisWeek ?? []).length
+          if (prevDaysWritten >= goalDaysPerWeek) streak += 1
+          else streak = 0
+        }
       }
-      // Net-negative day (heavy editing): preserve streak as-is
     }
 
-    saveDailyTracking({ date: today, startCount: totalWordCount, streak, hitToday: false })
+    saveDailyTracking({
+      date: today,
+      startCount: totalWordCount,
+      hitToday: false,
+      streak,
+      weekStart,
+      daysWrittenThisWeek,
+    })
   }, [session, totalWordCount > 0]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-mark goal as hit when daily words cross the threshold
+  // Mark today as written + check daily goal
   useEffect(() => {
+    if (!dailyTracking || dailyTracking.date !== today) return
+    const dailyWordsNow = Math.max(0, totalWordCount - (dailyTracking.startCount ?? totalWordCount))
     const goal = settings.wordCountGoal || 0
-    if (!goal || !dailyTracking || dailyTracking.date !== today) return
-    const dailyWords = totalWordCount - (dailyTracking.startCount ?? totalWordCount)
-    if (dailyWords >= goal && !dailyTracking.hitToday) {
-      saveDailyTracking({ ...dailyTracking, hitToday: true, streak: (dailyTracking.streak ?? 0) + 1 })
+    let updated = { ...dailyTracking }
+    let changed = false
+
+    // Mark today as a writing day if net positive words (weekly mode)
+    if (goalFrequency === 'weekly' && dailyWordsNow > 0) {
+      const days = dailyTracking.daysWrittenThisWeek ?? []
+      if (!days.includes(today)) {
+        updated = { ...updated, daysWrittenThisWeek: [...days, today] }
+        changed = true
+      }
     }
+
+    // Mark daily goal hit
+    if (goal && goalFrequency === 'daily' && dailyWordsNow >= goal && !dailyTracking.hitToday) {
+      updated = { ...updated, hitToday: true, streak: (dailyTracking.streak ?? 0) + 1 }
+      changed = true
+    }
+
+    if (changed) saveDailyTracking(updated)
   }, [totalWordCount]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const dailyWords = dailyTracking?.date === today
     ? Math.max(0, totalWordCount - (dailyTracking.startCount ?? totalWordCount))
+    : 0
+  const daysWrittenThisWeek = dailyTracking?.weekStart === getWeekStart(today)
+    ? (dailyTracking.daysWrittenThisWeek ?? []).length
     : 0
   const streak = dailyTracking?.streak ?? 0
 
@@ -509,7 +549,10 @@ export default function App() {
         isOnline={isOnline}
         totalWordCount={totalWordCount}
         dailyWords={dailyWords}
+        daysWrittenThisWeek={daysWrittenThisWeek}
         streak={streak}
+        goalFrequency={goalFrequency}
+        goalDaysPerWeek={goalDaysPerWeek}
         settings={settings}
         searchQuery={searchQuery}
         searchResults={searchResults}

@@ -3,7 +3,8 @@ import InboxPanel from './InboxPanel'
 import SearchResults from './SearchResults'
 
 export default function Sidebar({
-  sidebarTab, isOnline, totalWordCount, dailyWords, streak, settings,
+  sidebarTab, isOnline, totalWordCount, dailyWords, daysWrittenThisWeek,
+  streak, goalFrequency, goalDaysPerWeek, settings,
   searchQuery, searchResults, searchInputRef,
   onSidebarTabChange, onSelectScene, onSearchChange, onShowSettings, onSignOut,
   chapters, scenes, inboxItems, selectedSceneId,
@@ -12,7 +13,10 @@ export default function Sidebar({
   onAddInboxItem, onUpdateInboxItem, onDeleteInboxItem, onPromoteInboxItem,
 }) {
   const goal = settings?.wordCountGoal || 0
-  const progress = goal > 0 ? Math.min(100, Math.round((dailyWords / goal) * 100)) : 0
+  const isWeekly = goalFrequency === 'weekly'
+  const progress = isWeekly
+    ? Math.min(100, Math.round((daysWrittenThisWeek / goalDaysPerWeek) * 100))
+    : goal > 0 ? Math.min(100, Math.round((dailyWords / goal) * 100)) : 0
 
   return (
     <aside className="sidebar">
@@ -97,15 +101,17 @@ export default function Sidebar({
 
       {/* Footer */}
       <div className="sidebar-footer">
-        {goal > 0 ? (
+        {isWeekly || goal > 0 ? (
           <div className="goal-section">
             <div className="goal-row">
               <span className="goal-label">
-                {dailyWords.toLocaleString()} / {goal.toLocaleString()} today
-                {progress >= 100 ? ' ✓' : ` (${progress}%)`}
+                {isWeekly
+                  ? `${daysWrittenThisWeek} / ${goalDaysPerWeek} days this week${progress >= 100 ? ' ✓' : ''}`
+                  : `${dailyWords.toLocaleString()} / ${goal.toLocaleString()} today${progress >= 100 ? ' ✓' : ` (${progress}%)`}`
+                }
               </span>
               {streak > 0 && (
-                <span className="streak-badge" title={`${streak}-day streak`}>
+                <span className="streak-badge" title={`${streak}-${isWeekly ? 'week' : 'day'} streak`}>
                   🔥 {streak}
                 </span>
               )}

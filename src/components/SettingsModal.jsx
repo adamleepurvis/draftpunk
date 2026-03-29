@@ -5,6 +5,8 @@ export default function SettingsModal({ settings, onUpdate, onClose }) {
   const theme = settings.theme || 'dark'
   const typewriterMode = settings.typewriterMode || false
   const writingBg = settings.writingBg || 'default'
+  const goalFrequency = settings.goalFrequency || 'daily'
+  const goalDaysPerWeek = settings.goalDaysPerWeek || 2
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -31,16 +33,47 @@ export default function SettingsModal({ settings, onUpdate, onClose }) {
           </div>
 
           <div className="setting-row">
-            <label className="setting-label">Daily word count goal</label>
-            <input
-              className="setting-input"
-              type="number"
-              min="0"
-              value={goal}
-              onChange={(e) => onUpdate('wordCountGoal', parseInt(e.target.value) || 0)}
-              placeholder="e.g. 1000"
-            />
-            <span className="setting-hint">Set to 0 to hide the progress bar</span>
+            <label className="setting-label">Writing goal</label>
+            <div className="setting-options">
+              {[{ key: 'daily', label: 'Daily' }, { key: 'weekly', label: 'Weekly' }].map(({ key, label }) => (
+                <button
+                  key={key}
+                  className={`option-btn${goalFrequency === key ? ' active' : ''}`}
+                  onClick={() => onUpdate('goalFrequency', key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {goalFrequency === 'weekly' ? (
+              <>
+                <div className="setting-options" style={{ marginTop: '8px' }}>
+                  {[1,2,3,4,5,6,7].map((n) => (
+                    <button
+                      key={n}
+                      className={`option-btn${goalDaysPerWeek === n ? ' active' : ''}`}
+                      onClick={() => onUpdate('goalDaysPerWeek', n)}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <span className="setting-hint">{goalDaysPerWeek} day{goalDaysPerWeek !== 1 ? 's' : ''} per week</span>
+              </>
+            ) : (
+              <>
+                <input
+                  className="setting-input"
+                  type="number"
+                  min="0"
+                  value={goal}
+                  onChange={(e) => onUpdate('wordCountGoal', parseInt(e.target.value) || 0)}
+                  placeholder="e.g. 1000"
+                  style={{ marginTop: '8px' }}
+                />
+                <span className="setting-hint">Words per day — set to 0 to hide</span>
+              </>
+            )}
           </div>
 
           <div className="setting-row">

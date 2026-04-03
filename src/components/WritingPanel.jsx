@@ -51,7 +51,7 @@ export default function WritingPanel({
   scene, isSaving, settings, wordTarget, onSetWordTarget,
   fullscreen, onToggleFullscreen,
   onBack, onContentChange, onSynopsisChange, onNotesChange, onTitleChange, onStatusChange,
-  onExportScene, onExportAll,
+  onExportScene, onExportAll, onReviewSave, onReviewRelease,
 }) {
   const [localTitle, setLocalTitle] = useState('')
   const [editingTitle, setEditingTitle] = useState(false)
@@ -333,7 +333,7 @@ export default function WritingPanel({
               rows={5}
             />
           </div>
-          <div className={`sidepanel-section${reviewState === 'idle' ? ' sidepanel-section--grow' : ''}`}>
+          <div className={`sidepanel-section${!reviewState || (reviewState === 'idle' && !scene?.review) ? ' sidepanel-section--grow' : ''}`}>
             <label className="sidepanel-label">Notes</label>
             <textarea
               className="notes-sidepanel-textarea notes-sidepanel-textarea--grow"
@@ -342,14 +342,27 @@ export default function WritingPanel({
               placeholder="Research, continuity reminders, things to fix…"
             />
           </div>
-          {(reviewState === 'streaming' || reviewState === 'done' || reviewState === 'error') && (
+          {(reviewState !== 'idle' || scene?.review) && (
             <div ref={feedbackRef} className={`sidepanel-section sidepanel-section--grow review-panel${reviewState === 'error' ? ' review-error' : ''}`}>
               <div className="review-panel-header">
                 <span className="sidepanel-label review-panel-title">Editorial Notes</span>
-                <button className="review-panel-close" onClick={() => { setReviewState('idle'); setFeedback('') }}>✕</button>
+                <div className="review-panel-actions">
+                  {reviewState === 'done' && (
+                    <>
+                      <button className="review-save-btn" onClick={() => { onReviewSave(feedback); setReviewState('idle'); setFeedback('') }}>Save</button>
+                      <button className="review-panel-close" onClick={() => { setReviewState('idle'); setFeedback('') }}>Dismiss</button>
+                    </>
+                  )}
+                  {reviewState === 'idle' && scene?.review && (
+                    <button className="review-release-btn" onClick={onReviewRelease}>Release</button>
+                  )}
+                  {(reviewState === 'streaming' || reviewState === 'error') && (
+                    <button className="review-panel-close" onClick={() => { setReviewState('idle'); setFeedback('') }}>✕</button>
+                  )}
+                </div>
               </div>
               <div className="review-panel-body">
-                {feedback.split('\n').map((line, i) => (
+                {(reviewState !== 'idle' ? feedback : scene.review || '').split('\n').map((line, i) => (
                   <p key={i}>{renderReviewLine(line)}</p>
                 ))}
                 {reviewState === 'streaming' && <span className="review-cursor">▌</span>}

@@ -654,6 +654,8 @@ export default function App() {
         onStatusChange={(id, status) => updateScene(id, { status })}
         onExportScene={exportCurrentScene}
         onExportAll={exportAll}
+        onReviewSave={(review) => selectedSceneId && updateScene(selectedSceneId, { review })}
+        onReviewRelease={() => selectedSceneId && updateScene(selectedSceneId, { review: null })}
       />
       {showSettings && (
         <SettingsModal

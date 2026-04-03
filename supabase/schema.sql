@@ -70,6 +70,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE inbox;
 -- ALTER TABLE chapters ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 -- ALTER TABLE scenes   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
+-- ── Review migration (run once) ──────────────────────────────
+-- ALTER TABLE scenes ADD COLUMN IF NOT EXISTS review TEXT;
+
 -- ── Auth migration (run after enabling auth) ─────────────────
 -- Once you've enabled Supabase Auth and created a user, run this
 -- to lock the database down to authenticated users only.

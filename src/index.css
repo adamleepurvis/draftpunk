@@ -1358,6 +1358,34 @@ details[open] .promoted-section summary::before { content: '▾ '; }
   color: var(--accent);
 }
 .review-error .review-panel-title { color: var(--text-muted); }
+.review-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-save-btn {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.review-save-btn:hover { background: var(--accent-bright); }
+.review-release-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+.review-release-btn:hover { border-color: var(--text-muted); color: var(--text); }
 .review-panel-close {
   background: none;
   border: none;

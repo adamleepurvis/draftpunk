@@ -132,6 +132,7 @@ export default function WritingPanel({
     if (!scene?.content?.trim()) return
     setReviewState('loading')
     setFeedback('')
+    setShowNotes(true)
     try {
       const res = await fetch('/api/review', {
         method: 'POST',
@@ -312,21 +313,6 @@ export default function WritingPanel({
           spellCheck
         />
 
-        {/* Editorial feedback */}
-        {(reviewState === 'streaming' || reviewState === 'done' || reviewState === 'error') && (
-          <div ref={feedbackRef} className={`review-panel${reviewState === 'error' ? ' review-error' : ''}`}>
-            <div className="review-panel-header">
-              <span className="review-panel-title">Editorial Notes</span>
-              <button className="review-panel-close" onClick={() => { setReviewState('idle'); setFeedback('') }}>✕</button>
-            </div>
-            <div className="review-panel-body">
-              {feedback.split('\n').map((line, i) => (
-                <p key={i}>{renderReviewLine(line)}</p>
-              ))}
-              {reviewState === 'streaming' && <span className="review-cursor">▌</span>}
-            </div>
-          </div>
-        )}
       </div>
     </div>
 
@@ -347,7 +333,7 @@ export default function WritingPanel({
               rows={5}
             />
           </div>
-          <div className="sidepanel-section sidepanel-section--grow">
+          <div className={`sidepanel-section${reviewState === 'idle' ? ' sidepanel-section--grow' : ''}`}>
             <label className="sidepanel-label">Notes</label>
             <textarea
               className="notes-sidepanel-textarea notes-sidepanel-textarea--grow"
@@ -356,6 +342,20 @@ export default function WritingPanel({
               placeholder="Research, continuity reminders, things to fix…"
             />
           </div>
+          {(reviewState === 'streaming' || reviewState === 'done' || reviewState === 'error') && (
+            <div ref={feedbackRef} className={`sidepanel-section sidepanel-section--grow review-panel${reviewState === 'error' ? ' review-error' : ''}`}>
+              <div className="review-panel-header">
+                <span className="sidepanel-label review-panel-title">Editorial Notes</span>
+                <button className="review-panel-close" onClick={() => { setReviewState('idle'); setFeedback('') }}>✕</button>
+              </div>
+              <div className="review-panel-body">
+                {feedback.split('\n').map((line, i) => (
+                  <p key={i}>{renderReviewLine(line)}</p>
+                ))}
+                {reviewState === 'streaming' && <span className="review-cursor">▌</span>}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )}

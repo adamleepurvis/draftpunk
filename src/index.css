@@ -796,7 +796,7 @@ details[open] .promoted-section summary::before { content: '▾ '; }
 
 @media (min-width: 2000px) {
   .notes-sidepanel { width: 560px; }
-  .writing-body { margin: 0 auto; }
+  .writing-body { align-self: center; width: 100%; }
   .sidebar { width: 320px; }
 }
 
@@ -1239,10 +1239,9 @@ details[open] .promoted-section summary::before { content: '▾ '; }
 
 /* ── Review feedback panel ──────────────────────── */
 .review-panel {
-  margin-top: 48px;
   border-top: 2px solid var(--accent);
-  padding-top: 24px;
-  padding-bottom: 48px;
+  padding-top: 16px;
+  overflow-y: auto;
 }
 .review-panel.review-error { border-top-color: var(--border); }
 .review-panel-header {
@@ -1272,9 +1271,8 @@ details[open] .promoted-section summary::before { content: '▾ '; }
 }
 .review-panel-close:hover { color: var(--text); }
 .review-panel-body {
-  font-family: var(--font-writing, Georgia, serif);
-  font-size: 15px;
-  line-height: 1.75;
+  font-size: 13px;
+  line-height: 1.7;
   color: var(--text-muted);
 }
 .review-panel-body p { margin: 0 0 12px; }

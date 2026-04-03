@@ -81,7 +81,7 @@ export default function WritingPanel({
   useEffect(() => {
     setReviewState('idle')
     setFeedback('')
-    setShowNotes(false)
+    setShowNotes(window.innerWidth >= 2000)
   }, [scene?.id])
 
   useEffect(() => {

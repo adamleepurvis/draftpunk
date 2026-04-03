@@ -794,6 +794,12 @@ details[open] .promoted-section summary::before { content: '▾ '; }
   .notes-sidepanel { width: 480px; }
 }
 
+@media (min-width: 2000px) {
+  .notes-sidepanel { width: 560px; }
+  .writing-body { margin: 0 auto; }
+  .sidebar { width: 320px; }
+}
+
 .notes-sidepanel-header {
   display: flex;
   align-items: center;
@@ -1143,8 +1149,8 @@ details[open] .promoted-section summary::before { content: '▾ '; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-muted);
-  font-size: 12px;
-  padding: 5px 12px;
+  font-size: 13px;
+  padding: 7px 16px;
   transition: all 0.12s;
   text-transform: capitalize;
 }

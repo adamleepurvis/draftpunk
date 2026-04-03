@@ -19,6 +19,7 @@ import Sidebar from './components/Sidebar'
 import WritingPanel from './components/WritingPanel'
 import SettingsModal from './components/SettingsModal'
 import LoginScreen from './components/LoginScreen'
+import TrashPanel from './components/TrashPanel'
 
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined=loading, null=logged out
@@ -41,6 +42,8 @@ export default function App() {
     catch { return {} }
   })
   const [fullscreen, setFullscreen] = useState(false)
+  const [trashedChapters, setTrashedChapters] = useState([])
+  const [trashedScenes, setTrashedScenes] = useState([])
   const [dailyTracking, setDailyTracking] = useState(() => {
     try { return JSON.parse(localStorage.getItem('draftpunk_daily') || 'null') }
     catch { return null }
@@ -252,10 +255,12 @@ export default function App() {
   }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadAll() {
-    const [c, s, i] = await Promise.all([
-      supabase.from('chapters').select('*').order('position'),
-      supabase.from('scenes').select('*').order('position'),
+    const [c, s, i, tc, ts] = await Promise.all([
+      supabase.from('chapters').select('*').is('deleted_at', null).order('position'),
+      supabase.from('scenes').select('*').is('deleted_at', null).order('position'),
       supabase.from('inbox').select('*').order('created_at', { ascending: false }),
+      supabase.from('chapters').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }),
+      supabase.from('scenes').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }),
     ])
     if (c.data) setChapters(c.data)
     if (s.data) {
@@ -265,13 +270,15 @@ export default function App() {
       ))
     }
     if (i.data) setInboxItems(i.data)
+    if (tc.data) setTrashedChapters(tc.data)
+    if (ts.data) setTrashedScenes(ts.data)
   }
 
   function setupRealtime() {
     const channel = supabase
       .channel('db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters' }, (payload) => {
-        setChapters((prev) => applyChange(prev, payload, 'position'))
+        setChapters((prev) => applyChange(prev, payload, 'position').filter((c) => !c.deleted_at))
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scenes' }, (payload) => {
         setScenes((prev) => {
@@ -282,9 +289,9 @@ export default function App() {
           ) {
             return prev.map((s) =>
               s.id === payload.new.id ? { ...payload.new, content: s.content } : s
-            )
+            ).filter((s) => !s.deleted_at)
           }
-          return applyChange(prev, payload, 'position')
+          return applyChange(prev, payload, 'position').filter((s) => !s.deleted_at)
         })
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox' }, (payload) => {
@@ -378,11 +385,34 @@ export default function App() {
   }
 
   async function deleteChapter(id) {
-    const deletedSceneIds = scenes.filter((s) => s.chapter_id === id).map((s) => s.id)
-    await supabase.from('chapters').delete().eq('id', id)
+    const now = new Date().toISOString()
+    const chapter = chapters.find((c) => c.id === id)
+    const chapterScenes = scenes.filter((s) => s.chapter_id === id)
+    await supabase.from('chapters').update({ deleted_at: now }).eq('id', id)
+    if (chapterScenes.length > 0) {
+      await supabase.from('scenes').update({ deleted_at: now }).eq('chapter_id', id)
+    }
     setChapters((prev) => prev.filter((c) => c.id !== id))
     setScenes((prev) => prev.filter((s) => s.chapter_id !== id))
-    if (deletedSceneIds.includes(selectedSceneId)) { setSelectedSceneId(null); setMobileView('sidebar') }
+    setTrashedChapters((prev) => [{ ...chapter, deleted_at: now }, ...prev])
+    setTrashedScenes((prev) => [...chapterScenes.map((s) => ({ ...s, deleted_at: now })), ...prev])
+    if (chapterScenes.some((s) => s.id === selectedSceneId)) { setSelectedSceneId(null); setMobileView('sidebar') }
+  }
+
+  async function restoreChapter(id) {
+    const chapter = trashedChapters.find((c) => c.id === id)
+    if (!chapter) return
+    const associated = trashedScenes.filter(
+      (s) => s.chapter_id === id && Math.abs(new Date(s.deleted_at) - new Date(chapter.deleted_at)) < 2000
+    )
+    await supabase.from('chapters').update({ deleted_at: null }).eq('id', id)
+    if (associated.length > 0) {
+      await supabase.from('scenes').update({ deleted_at: null }).in('id', associated.map((s) => s.id))
+    }
+    setTrashedChapters((prev) => prev.filter((c) => c.id !== id))
+    setTrashedScenes((prev) => prev.filter((s) => !associated.some((a) => a.id === s.id)))
+    setChapters((prev) => [...prev, { ...chapter, deleted_at: null }].sort((a, b) => a.position - b.position))
+    setScenes((prev) => [...prev, ...associated.map((s) => ({ ...s, deleted_at: null }))].sort((a, b) => a.position - b.position))
   }
 
   async function reorderChapter(id, direction) {
@@ -418,9 +448,36 @@ export default function App() {
   }
 
   async function deleteScene(id) {
-    await supabase.from('scenes').delete().eq('id', id)
+    const now = new Date().toISOString()
+    const scene = scenes.find((s) => s.id === id)
+    await supabase.from('scenes').update({ deleted_at: now }).eq('id', id)
     setScenes((prev) => prev.filter((s) => s.id !== id))
+    setTrashedScenes((prev) => [{ ...scene, deleted_at: now }, ...prev])
     if (selectedSceneId === id) { setSelectedSceneId(null); setMobileView('sidebar') }
+  }
+
+  async function restoreScene(id) {
+    const scene = trashedScenes.find((s) => s.id === id)
+    if (!scene) return
+    await supabase.from('scenes').update({ deleted_at: null }).eq('id', id)
+    setTrashedScenes((prev) => prev.filter((s) => s.id !== id))
+    setScenes((prev) => [...prev, { ...scene, deleted_at: null }].sort((a, b) => a.position - b.position))
+  }
+
+  async function emptyTrash() {
+    const chapterIds = trashedChapters.map((c) => c.id)
+    const sceneIds = trashedScenes.map((s) => s.id)
+    await Promise.all([
+      chapterIds.length > 0 && supabase.from('chapters').delete().in('id', chapterIds),
+      sceneIds.length > 0 && supabase.from('scenes').delete().in('id', sceneIds),
+    ])
+    setTrashedChapters([])
+    setTrashedScenes([])
+  }
+
+  function handleRestore(type, id) {
+    if (type === 'chapter') restoreChapter(id)
+    else restoreScene(id)
   }
 
   async function reorderScene(id, direction) {
@@ -557,6 +614,8 @@ export default function App() {
         searchQuery={searchQuery}
         searchResults={searchResults}
         searchInputRef={searchInputRef}
+        trashedChapters={trashedChapters}
+        trashedScenes={trashedScenes}
         onSidebarTabChange={setSidebarTab}
         onSelectScene={selectScene}
         onSearchChange={setSearchQuery}
@@ -576,6 +635,8 @@ export default function App() {
         onUpdateInboxItem={updateInboxItem}
         onDeleteInboxItem={deleteInboxItem}
         onPromoteInboxItem={promoteInboxItem}
+        onRestore={handleRestore}
+        onEmptyTrash={emptyTrash}
       />
       <WritingPanel
         scene={selectedScene}

@@ -1,17 +1,21 @@
 import OutlinePanel from './OutlinePanel'
 import InboxPanel from './InboxPanel'
 import SearchResults from './SearchResults'
+import TrashPanel from './TrashPanel'
 
 export default function Sidebar({
   sidebarTab, isOnline, totalWordCount, dailyWords, daysWrittenThisWeek,
   streak, goalFrequency, goalDaysPerWeek, settings,
   searchQuery, searchResults, searchInputRef,
+  trashedChapters, trashedScenes,
   onSidebarTabChange, onSelectScene, onSearchChange, onShowSettings, onSignOut,
   chapters, scenes, inboxItems, selectedSceneId,
   onAddChapter, onUpdateChapter, onDeleteChapter, onReorderChapter, onReorderChaptersByIds,
   onAddScene, onUpdateScene, onDeleteScene, onReorderScene, onReorderScenesByIds,
   onAddInboxItem, onUpdateInboxItem, onDeleteInboxItem, onPromoteInboxItem,
+  onRestore, onEmptyTrash,
 }) {
+  const trashCount = (trashedChapters?.length ?? 0) + (trashedScenes?.length ?? 0)
   const goal = settings?.wordCountGoal || 0
   const isWeekly = goalFrequency === 'weekly'
   const progress = isWeekly
@@ -62,6 +66,12 @@ export default function Sidebar({
           >
             Inbox
           </button>
+          <button
+            className={`tab-btn${sidebarTab === 'trash' ? ' active' : ''}`}
+            onClick={() => onSidebarTabChange('trash')}
+          >
+            Trash{trashCount > 0 ? <span className="trash-count">{trashCount}</span> : null}
+          </button>
         </div>
       )}
 
@@ -86,7 +96,7 @@ export default function Sidebar({
             onReorderScene={onReorderScene}
             onReorderScenesByIds={onReorderScenesByIds}
           />
-        ) : (
+        ) : sidebarTab === 'inbox' ? (
           <InboxPanel
             inboxItems={inboxItems}
             chapters={chapters}
@@ -95,6 +105,13 @@ export default function Sidebar({
             onUpdateInboxItem={onUpdateInboxItem}
             onDeleteInboxItem={onDeleteInboxItem}
             onPromoteInboxItem={onPromoteInboxItem}
+          />
+        ) : (
+          <TrashPanel
+            trashedChapters={trashedChapters}
+            trashedScenes={trashedScenes}
+            onRestore={onRestore}
+            onEmptyTrash={onEmptyTrash}
           />
         )}
       </div>
